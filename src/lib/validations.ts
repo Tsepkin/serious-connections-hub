@@ -27,7 +27,13 @@ export const profileSchema = z.object({
     .trim()
     .min(10, "Опишите ваши семейные цели (минимум 10 символов)")
     .max(1000, "Описание целей не может быть длиннее 1000 символов"),
-  photo_url: z.string().url("Некорректный URL фотографии").optional().or(z.literal("")),
+  gender: z.enum(["male", "female"], { required_error: "Укажите ваш пол" }),
+  looking_for: z.enum(["male", "female"], { required_error: "Укажите, кого вы ищете" }),
+  children: z.enum(["yes", "no", "not_say"]).optional(),
+  smoking: z.enum(["smoke", "not_smoke", "neutral"]).optional(),
+  alcohol: z.enum(["drink", "not_drink", "sometimes"]).optional(),
+  zodiac_sign: z.string().optional(),
+  photos: z.array(z.string()).max(9, "Максимум 9 фотографий").optional(),
 });
 
 export const messageSchema = z.object({

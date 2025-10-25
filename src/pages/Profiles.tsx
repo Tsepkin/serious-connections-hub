@@ -1,154 +1,312 @@
-import { useState } from "react";
-import ProfileCard from "@/components/ProfileCard";
-import { Button } from "@/components/ui/button";
-import { Heart, MessageCircle, User, Menu } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Heart, X, Calendar, ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import ProfileCard from "@/components/ProfileCard";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
-// Mock data
-const mockProfiles = [
-  {
-    id: 1,
-    name: "Анна",
-    age: 28,
-    city: "Москва",
-    photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&h=800&fit=crop",
-    honestyRating: 98,
-    about: "Люблю путешествия, книги и долгие разговоры за чашкой кофе. Работаю в IT, ценю искренность и доброту.",
-    goals: "Мечтаю о крепкой семье, где царит взаимопонимание и поддержка. Хочу двоих детей и собаку.",
-    reviews: [
-      {
-        author: "Дмитрий",
-        text: "Очень приятное общение, искренний и открытый человек. Рекомендую!",
-        rating: 5
-      },
-      {
-        author: "Сергей",
-        text: "Отличная встреча, интересный собеседник с серьезными намерениями.",
-        rating: 5
-      }
-    ]
-  },
-  {
-    id: 2,
-    name: "Мария",
-    age: 26,
-    city: "Санкт-Петербург",
-    photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&h=800&fit=crop",
-    honestyRating: 95,
-    about: "Психолог по образованию, люблю йогу и здоровый образ жизни. Ценю честность и эмоциональную зрелость.",
-    goals: "Ищу партнера для создания гармоничной семьи, основанной на доверии и взаимном росте.",
-    reviews: [
-      {
-        author: "Алексей",
-        text: "Замечательный человек, очень позитивная и целеустремленная.",
-        rating: 5
-      }
-    ]
-  }
-];
+interface Profile {
+  id: string;
+  name: string;
+  age: number;
+  city: string;
+  about_me: string;
+  photos: string[];
+  honesty_rating: number;
+  total_ratings: number;
+  gender: string;
+  looking_for: string;
+}
 
 const Profiles = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [familiesCount] = useState(10548);
+  const [loading, setLoading] = useState(true);
+  const [metBefore, setMetBefore] = useState(false);
 
-  const currentProfile = mockProfiles[currentIndex];
+  useEffect(() => {
+    if (user) {
+      fetchProfiles();
+    }
+  }, [user]);
 
-  const handleLike = () => {
-    console.log("Liked profile:", currentProfile.id);
-    nextProfile();
-  };
+  useEffect(() => {
+    if (currentProfile) {
+      checkIfMet();
+    }
+  }, [currentIndex]);
 
-  const handleDislike = () => {
-    console.log("Disliked profile:", currentProfile.id);
-    nextProfile();
-  };
+  const fetchProfiles = async () => {
+    try {
+      const { data: myProfile } = await supabase
+        .from("profiles")
+        .select("gender, looking_for")
+        .eq("id", user!.id)
+        .maybeSingle();
 
-  const handleMeetingRequest = () => {
-    console.log("Meeting request for:", currentProfile.id);
-    // В реальном приложении здесь будет логика отправки запроса на встречу
-  };
+      if (!myProfile) {
+        navigate("/create-profile");
+        return;
+      }
 
-  const nextProfile = () => {
-    if (currentIndex < mockProfiles.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      setCurrentIndex(0); // Loop back to first profile
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("gender", myProfile.looking_for)
+        .eq("looking_for", myProfile.gender)
+        .neq("id", user!.id);
+
+      if (error) throw error;
+
+      setProfiles(data || []);
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
+  const checkIfMet = async () => {
+    if (!currentProfile) return;
+
+    const { data } = await supabase
+      .from("meetings")
+      .select("*")
+      .or(`and(user1_id.eq.${user!.id},user2_id.eq.${currentProfile.id}),and(user1_id.eq.${currentProfile.id},user2_id.eq.${user!.id})`)
+      .maybeSingle();
+
+    setMetBefore(!!data);
+  };
+
+  const handleMeetingConfirmation = async () => {
+    if (!currentProfile) return;
+
+    try {
+      const user1Id = user!.id < currentProfile.id ? user!.id : currentProfile.id;
+      const user2Id = user!.id < currentProfile.id ? currentProfile.id : user!.id;
+      const isUser1 = user!.id === user1Id;
+
+      const { data: existingMeeting } = await supabase
+        .from("meetings")
+        .select("*")
+        .eq("user1_id", user1Id)
+        .eq("user2_id", user2Id)
+        .maybeSingle();
+
+      if (existingMeeting) {
+        const updateField = isUser1 ? "confirmed_by_user1" : "confirmed_by_user2";
+        
+        await supabase
+          .from("meetings")
+          .update({ [updateField]: true })
+          .eq("id", existingMeeting.id);
+      } else {
+        await supabase
+          .from("meetings")
+          .insert({
+            user1_id: user1Id,
+            user2_id: user2Id,
+            [isUser1 ? "confirmed_by_user1" : "confirmed_by_user2"]: true,
+          });
+      }
+
+      setMetBefore(true);
+      toast({
+        title: "Отмечено",
+        description: "Теперь вы можете оценить встречу",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleLike = async () => {
+    if (!currentProfile || !metBefore) return;
+
+    try {
+      await supabase
+        .from("likes")
+        .insert({
+          user_id: user!.id,
+          liked_user_id: currentProfile.id,
+        });
+
+      const { data: mutualLike } = await supabase
+        .from("likes")
+        .select("*")
+        .eq("user_id", currentProfile.id)
+        .eq("liked_user_id", user!.id)
+        .maybeSingle();
+
+      if (mutualLike) {
+        const user1Id = user!.id < currentProfile.id ? user!.id : currentProfile.id;
+        const user2Id = user!.id < currentProfile.id ? currentProfile.id : user!.id;
+
+        await supabase
+          .from("conversations")
+          .insert({
+            user1_id: user1Id,
+            user2_id: user2Id,
+          });
+
+        toast({
+          title: "Взаимная симпатия!",
+          description: "Теперь вы можете начать общаться",
+        });
+      } else {
+        toast({
+          title: "Лайк отправлен",
+          description: "Ожидаем ответной реакции",
+        });
+      }
+
+      nextProfile();
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDislike = () => {
+    if (!metBefore) return;
+    nextProfile();
+  };
+
+  const nextProfile = () => {
+    if (currentIndex < profiles.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      setCurrentIndex(0);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
+        <p className="text-foreground">Загрузка...</p>
+      </div>
+    );
+  }
+
+  const currentProfile = profiles[currentIndex];
+
+  if (!currentProfile) {
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex flex-col items-center justify-center p-4">
+        <h2 className="text-2xl font-bold text-foreground mb-4">Нет доступных анкет</h2>
+        <p className="text-muted-foreground mb-6">Попробуйте зайти позже</p>
+        <Button onClick={() => navigate("/profile")}>
+          К моему профилю
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-subtle">
-      {/* Header */}
-      <header className="bg-card/80 backdrop-blur-sm border-b border-border sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold bg-gradient-romantic bg-clip-text text-transparent">
-              Создай семью
-            </h1>
-            
-            <div className="flex items-center gap-2 bg-primary/10 rounded-full px-4 py-2">
-              <Heart className="text-primary" size={18} />
-              <span className="text-sm font-semibold text-foreground">
-                <span className="text-primary">{familiesCount.toLocaleString()}</span> семей
-              </span>
+    <div className="min-h-screen bg-gradient-subtle pb-20">
+      <div className="bg-gradient-romantic p-4 shadow-card">
+        <div className="flex items-center justify-between max-w-2xl mx-auto">
+          <Button variant="ghost" onClick={() => navigate("/welcome")} className="text-white">
+            <ArrowLeft size={24} />
+          </Button>
+          <h1 className="text-xl font-bold text-white">Анкеты</h1>
+          <div className="w-10" />
+        </div>
+      </div>
+
+      <div className="p-4 max-w-2xl mx-auto">
+        <div className="bg-card rounded-3xl shadow-card overflow-hidden">
+          <div className="relative aspect-[3/4] bg-muted">
+            <img 
+              src={currentProfile.photos[0] || "/placeholder.svg"}
+              alt={currentProfile.name}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 text-white">
+              <h2 className="text-3xl font-bold mb-2">{currentProfile.name}, {currentProfile.age}</h2>
+              <p className="text-white/90">{currentProfile.city}</p>
+            </div>
+            <div className="absolute top-4 right-4 bg-card/95 backdrop-blur-sm rounded-2xl px-4 py-2">
+              <div className="text-xs text-muted-foreground">Рейтинг</div>
+              <div className="text-lg font-bold text-primary">{currentProfile.honesty_rating}%</div>
             </div>
           </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex justify-center">
-          {currentProfile && (
-            <ProfileCard
-              profile={currentProfile}
-              onLike={handleLike}
-              onDislike={handleDislike}
-              onMeetingRequest={handleMeetingRequest}
-            />
-          )}
+          <div className="p-6">
+            <h3 className="font-semibold text-foreground mb-2">О себе</h3>
+            <p className="text-muted-foreground">{currentProfile.about_me}</p>
+          </div>
         </div>
 
-        {currentIndex === mockProfiles.length - 1 && (
-          <div className="text-center mt-8">
-            <p className="text-muted-foreground">Это все профили на сегодня</p>
-            <Button 
-              variant="hero" 
-              className="mt-4"
-              onClick={() => navigate('/welcome')}
+        {!metBefore && (
+          <div className="mt-4">
+            <Button
+              onClick={handleMeetingConfirmation}
+              className="w-full"
+              variant="outline"
             >
-              Вернуться на главную
+              <Calendar className="mr-2" size={20} />
+              Мы встретились
+            </Button>
+            <p className="text-sm text-muted-foreground text-center mt-2">
+              Отметьте встречу, чтобы иметь возможность оценить
+            </p>
+          </div>
+        )}
+
+        {metBefore && (
+          <div className="flex gap-4 mt-6">
+            <Button
+              onClick={handleDislike}
+              variant="outline"
+              size="lg"
+              className="flex-1 h-16"
+            >
+              <X size={32} />
+            </Button>
+            <Button
+              onClick={handleLike}
+              variant="hero"
+              size="lg"
+              className="flex-1 h-16"
+            >
+              <Heart size={32} />
             </Button>
           </div>
         )}
-      </main>
+      </div>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-around py-4">
-            <button className="flex flex-col items-center gap-1 text-primary">
-              <Heart size={24} />
-              <span className="text-xs font-medium">Анкеты</span>
-            </button>
-            <button 
-              className="flex flex-col items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => navigate('/chats')}
-            >
-              <MessageCircle size={24} />
-              <span className="text-xs font-medium">Диалоги</span>
-            </button>
-            <button 
-              className="flex flex-col items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => navigate('/profile')}
-            >
-              <User size={24} />
-              <span className="text-xs font-medium">Профиль</span>
-            </button>
-          </div>
+      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border py-3">
+        <div className="flex justify-around max-w-2xl mx-auto">
+          <Button variant="ghost" className="flex flex-col items-center gap-1">
+            <Heart size={24} className="text-primary" />
+            <span className="text-xs text-primary font-semibold">Анкеты</span>
+          </Button>
+          <Button variant="ghost" className="flex flex-col items-center gap-1" onClick={() => navigate("/chats")}>
+            <span className="text-2xl">💬</span>
+            <span className="text-xs text-muted-foreground">Диалоги</span>
+          </Button>
+          <Button variant="ghost" className="flex flex-col items-center gap-1" onClick={() => navigate("/profile")}>
+            <span className="text-2xl">👤</span>
+            <span className="text-xs text-muted-foreground">Профиль</span>
+          </Button>
         </div>
-      </nav>
+      </div>
     </div>
   );
 };

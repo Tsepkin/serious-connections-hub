@@ -59,6 +59,84 @@ export type Database = {
           },
         ]
       }
+      likes: {
+        Row: {
+          created_at: string | null
+          id: string
+          liked_user_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          liked_user_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          liked_user_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "likes_liked_user_id_fkey"
+            columns: ["liked_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meetings: {
+        Row: {
+          confirmed_by_user1: boolean | null
+          confirmed_by_user2: boolean | null
+          created_at: string | null
+          id: string
+          user1_id: string
+          user2_id: string
+        }
+        Insert: {
+          confirmed_by_user1?: boolean | null
+          confirmed_by_user2?: boolean | null
+          created_at?: string | null
+          id?: string
+          user1_id: string
+          user2_id: string
+        }
+        Update: {
+          confirmed_by_user1?: boolean | null
+          confirmed_by_user2?: boolean | null
+          created_at?: string | null
+          id?: string
+          user1_id?: string
+          user2_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetings_user1_id_fkey"
+            columns: ["user1_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meetings_user2_id_fkey"
+            columns: ["user2_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string
@@ -102,47 +180,68 @@ export type Database = {
         Row: {
           about_me: string
           age: number
+          alcohol: string | null
+          children: string | null
           city: string
           created_at: string | null
           family_goals: string
+          gender: string | null
           honesty_rating: number | null
           id: string
+          looking_for: string | null
           name: string
           phone: string
           photo_url: string | null
+          photos: string[] | null
+          smoking: string | null
           total_ratings: number | null
           updated_at: string | null
           values: string
+          zodiac_sign: string | null
         }
         Insert: {
           about_me: string
           age: number
+          alcohol?: string | null
+          children?: string | null
           city: string
           created_at?: string | null
           family_goals: string
+          gender?: string | null
           honesty_rating?: number | null
           id: string
+          looking_for?: string | null
           name: string
           phone: string
           photo_url?: string | null
+          photos?: string[] | null
+          smoking?: string | null
           total_ratings?: number | null
           updated_at?: string | null
           values: string
+          zodiac_sign?: string | null
         }
         Update: {
           about_me?: string
           age?: number
+          alcohol?: string | null
+          children?: string | null
           city?: string
           created_at?: string | null
           family_goals?: string
+          gender?: string | null
           honesty_rating?: number | null
           id?: string
+          looking_for?: string | null
           name?: string
           phone?: string
           photo_url?: string | null
+          photos?: string[] | null
+          smoking?: string | null
           total_ratings?: number | null
           updated_at?: string | null
           values?: string
+          zodiac_sign?: string | null
         }
         Relationships: []
       }
