@@ -48,30 +48,10 @@ const Profiles = () => {
     try {
       console.log("Fetching profiles...");
       
-      const { data: myProfile, error: profileError } = await supabase
-        .from("profiles")
-        .select("gender, looking_for")
-        .eq("id", user!.id)
-        .maybeSingle();
-
-      console.log("My profile:", myProfile);
-
-      if (profileError) {
-        console.error("Profile error:", profileError);
-        throw profileError;
-      }
-
-      if (!myProfile) {
-        console.log("No profile found, redirecting to create-profile");
-        navigate("/create-profile");
-        return;
-      }
-
+      // Fetch all profiles except the current user
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
-        .eq("gender", myProfile.looking_for)
-        .eq("looking_for", myProfile.gender)
         .neq("id", user!.id);
 
       console.log("Fetched profiles:", data);
