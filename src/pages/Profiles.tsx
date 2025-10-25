@@ -36,20 +36,31 @@ const Profiles = () => {
   }, [user]);
 
   useEffect(() => {
+    const currentProfile = profiles[currentIndex];
     if (currentProfile) {
       checkIfMet();
     }
-  }, [currentIndex]);
+  }, [currentIndex, profiles]);
 
   const fetchProfiles = async () => {
     try {
-      const { data: myProfile } = await supabase
+      console.log("Fetching profiles...");
+      
+      const { data: myProfile, error: profileError } = await supabase
         .from("profiles")
         .select("gender, looking_for")
         .eq("id", user!.id)
         .maybeSingle();
 
+      console.log("My profile:", myProfile);
+
+      if (profileError) {
+        console.error("Profile error:", profileError);
+        throw profileError;
+      }
+
       if (!myProfile) {
+        console.log("No profile found, redirecting to create-profile");
         navigate("/create-profile");
         return;
       }
@@ -61,10 +72,13 @@ const Profiles = () => {
         .eq("looking_for", myProfile.gender)
         .neq("id", user!.id);
 
+      console.log("Fetched profiles:", data);
+
       if (error) throw error;
 
       setProfiles(data || []);
     } catch (error: any) {
+      console.error("Error in fetchProfiles:", error);
       toast({
         title: "Ошибка",
         description: error.message,
@@ -76,12 +90,13 @@ const Profiles = () => {
   };
 
   const checkIfMet = async () => {
-    if (!currentProfile) return;
+    const profile = profiles[currentIndex];
+    if (!profile) return;
 
     const { data } = await supabase
       .from("meetings")
       .select("*")
-      .or(`and(user1_id.eq.${user!.id},user2_id.eq.${currentProfile.id}),and(user1_id.eq.${currentProfile.id},user2_id.eq.${user!.id})`)
+      .or(`and(user1_id.eq.${user!.id},user2_id.eq.${profile.id}),and(user1_id.eq.${profile.id},user2_id.eq.${user!.id})`)
       .maybeSingle();
 
     setMetBefore(!!data);
