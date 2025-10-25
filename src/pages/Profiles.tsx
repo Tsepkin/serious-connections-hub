@@ -194,17 +194,23 @@ const Profiles = () => {
         .eq("user2_id", user2Id)
         .maybeSingle();
 
-      if (existingConversation) {
-        navigate("/chats");
-      } else {
-        await supabase
+      let conversationId = existingConversation?.id;
+
+      if (!conversationId) {
+        const { data: newConversation, error } = await supabase
           .from("conversations")
           .insert({
             user1_id: user1Id,
             user2_id: user2Id,
-          });
-        navigate("/chats");
+          })
+          .select("id")
+          .single();
+
+        if (error) throw error;
+        conversationId = newConversation.id;
       }
+
+      navigate(`/chats?conversation=${conversationId}`);
     } catch (error: any) {
       toast({
         title: "Ошибка",
