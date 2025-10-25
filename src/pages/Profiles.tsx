@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, X, Calendar, ArrowLeft } from "lucide-react";
+import { Heart, Calendar, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import ProfileCard from "@/components/ProfileCard";
+import ReviewDialog from "@/components/ReviewDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -27,7 +27,9 @@ const Profiles = () => {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [metBefore, setMetBefore] = useState(false);
+  const [meetingConfirmed, setMeetingConfirmed] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [showReviewDialog, setShowReviewDialog] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -38,7 +40,7 @@ const Profiles = () => {
   useEffect(() => {
     const currentProfile = profiles[currentIndex];
     if (currentProfile) {
-      checkIfMet();
+      checkMeetingStatus();
     }
   }, [currentIndex, profiles]);
 
@@ -89,23 +91,32 @@ const Profiles = () => {
     }
   };
 
-  const checkIfMet = async () => {
+  const checkMeetingStatus = async () => {
     const profile = profiles[currentIndex];
     if (!profile) return;
 
-    const { data } = await supabase
-      .from("meetings")
-      .select("*")
+    // Check if there's a confirmed meeting
+    const { data: conversation } = await supabase
+      .from("conversations")
+      .select("id, meeting_confirmed, meeting_date")
       .or(`and(user1_id.eq.${user!.id},user2_id.eq.${profile.id}),and(user1_id.eq.${profile.id},user2_id.eq.${user!.id})`)
+      .eq("meeting_confirmed", true)
       .maybeSingle();
 
-    setMetBefore(!!data);
+    setMeetingConfirmed(!!conversation);
+    setConversationId(conversation?.id || null);
   };
 
-  const handleMeetingConfirmation = async () => {
-    if (!currentProfile) return;
+  const confirmMeeting = async () => {
+    if (!currentProfile || !conversationId) return;
+    setShowReviewDialog(true);
+  };
+
+  const submitReview = async (rating: number, comment: string, isLike: boolean) => {
+    if (!currentProfile || !conversationId) return;
 
     try {
+      // Create meeting record
       const user1Id = user!.id < currentProfile.id ? user!.id : currentProfile.id;
       const user2Id = user!.id < currentProfile.id ? currentProfile.id : user!.id;
       const isUser1 = user!.id === user1Id;
@@ -119,7 +130,6 @@ const Profiles = () => {
 
       if (existingMeeting) {
         const updateField = isUser1 ? "confirmed_by_user1" : "confirmed_by_user2";
-        
         await supabase
           .from("meetings")
           .update({ [updateField]: true })
@@ -134,59 +144,31 @@ const Profiles = () => {
           });
       }
 
-      setMetBefore(true);
-      toast({
-        title: "Отмечено",
-        description: "Теперь вы можете оценить встречу",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Ошибка",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleLike = async () => {
-    if (!currentProfile || !metBefore) return;
-
-    try {
+      // Create review
       await supabase
-        .from("likes")
+        .from("reviews")
         .insert({
-          user_id: user!.id,
-          liked_user_id: currentProfile.id,
+          reviewer_id: user!.id,
+          reviewed_id: currentProfile.id,
+          conversation_id: conversationId,
+          rating: rating,
+          comment: comment || null,
         });
 
-      const { data: mutualLike } = await supabase
-        .from("likes")
-        .select("*")
-        .eq("user_id", currentProfile.id)
-        .eq("liked_user_id", user!.id)
-        .maybeSingle();
-
-      if (mutualLike) {
-        const user1Id = user!.id < currentProfile.id ? user!.id : currentProfile.id;
-        const user2Id = user!.id < currentProfile.id ? currentProfile.id : user!.id;
-
+      if (isLike) {
         await supabase
-          .from("conversations")
+          .from("likes")
           .insert({
-            user1_id: user1Id,
-            user2_id: user2Id,
+            user_id: user!.id,
+            liked_user_id: currentProfile.id,
           });
-
-        toast({
-          title: "Взаимная симпатия!",
-          description: "Теперь вы можете начать общаться",
-        });
-      } else {
-        toast({
-          title: "Лайк отправлен",
-          description: "Ожидаем ответной реакции",
-        });
       }
+
+      setShowReviewDialog(false);
+      toast({
+        title: "Отзыв отправлен",
+        description: "Спасибо за вашу оценку!",
+      });
 
       nextProfile();
     } catch (error: any) {
@@ -196,11 +178,6 @@ const Profiles = () => {
         variant: "destructive",
       });
     }
-  };
-
-  const handleDislike = () => {
-    if (!metBefore) return;
-    nextProfile();
   };
 
   const nextProfile = () => {
@@ -268,43 +245,37 @@ const Profiles = () => {
           </div>
         </div>
 
-        {!metBefore && (
+        {meetingConfirmed && (
           <div className="mt-4">
             <Button
-              onClick={handleMeetingConfirmation}
+              onClick={confirmMeeting}
               className="w-full"
-              variant="outline"
+              variant="hero"
             >
               <Calendar className="mr-2" size={20} />
-              Мы встретились
+              Мы встретились - Оценить встречу
             </Button>
             <p className="text-sm text-muted-foreground text-center mt-2">
-              Отметьте встречу, чтобы иметь возможность оценить
+              Оцените встречу с {currentProfile.name}
             </p>
           </div>
         )}
 
-        {metBefore && (
-          <div className="flex gap-4 mt-6">
-            <Button
-              onClick={handleDislike}
-              variant="outline"
-              size="lg"
-              className="flex-1 h-16"
-            >
-              <X size={32} />
-            </Button>
-            <Button
-              onClick={handleLike}
-              variant="hero"
-              size="lg"
-              className="flex-1 h-16"
-            >
-              <Heart size={32} />
-            </Button>
+        {!meetingConfirmed && (
+          <div className="mt-4 text-center p-4 bg-muted/50 rounded-lg">
+            <p className="text-sm text-muted-foreground">
+              Чтобы оценить встречу, сначала предложите встретиться в чате
+            </p>
           </div>
         )}
       </div>
+
+      <ReviewDialog
+        open={showReviewDialog}
+        onClose={() => setShowReviewDialog(false)}
+        onSubmit={submitReview}
+        profileName={currentProfile.name}
+      />
 
       <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border py-3">
         <div className="flex justify-around max-w-2xl mx-auto">

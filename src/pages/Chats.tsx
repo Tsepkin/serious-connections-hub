@@ -3,13 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Heart, Send } from "lucide-react";
+import { Heart, Send, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
 interface Conversation {
   id: string;
+  user1_id: string;
+  user2_id: string;
+  meeting_requested_by_user1: boolean;
+  meeting_requested_by_user2: boolean;
+  meeting_confirmed: boolean;
   other_user: {
     id: string;
     name: string;
@@ -35,6 +40,7 @@ const Chats = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -44,6 +50,8 @@ const Chats = () => {
 
   useEffect(() => {
     if (selectedChat) {
+      const conv = conversations.find(c => c.id === selectedChat);
+      setCurrentConversation(conv || null);
       fetchMessages(selectedChat);
       
       const channel = supabase
@@ -60,13 +68,27 @@ const Chats = () => {
             setMessages((prev) => [...prev, payload.new as Message]);
           }
         )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'conversations',
+            filter: `id=eq.${selectedChat}`,
+          },
+          (payload) => {
+            const updated = payload.new as any;
+            setCurrentConversation(prev => prev ? { ...prev, ...updated } : null);
+            setConversations(prev => prev.map(c => c.id === selectedChat ? { ...c, ...updated } : c));
+          }
+        )
         .subscribe();
 
       return () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [selectedChat]);
+  }, [selectedChat, conversations]);
 
   const fetchConversations = async () => {
     try {
@@ -76,6 +98,9 @@ const Chats = () => {
           id,
           user1_id,
           user2_id,
+          meeting_requested_by_user1,
+          meeting_requested_by_user2,
+          meeting_confirmed,
           user1:profiles!conversations_user1_id_fkey(id, name, photos),
           user2:profiles!conversations_user2_id_fkey(id, name, photos)
         `)
@@ -97,6 +122,11 @@ const Chats = () => {
 
           return {
             id: conv.id,
+            user1_id: conv.user1_id,
+            user2_id: conv.user2_id,
+            meeting_requested_by_user1: conv.meeting_requested_by_user1,
+            meeting_requested_by_user2: conv.meeting_requested_by_user2,
+            meeting_confirmed: conv.meeting_confirmed,
             other_user: otherUser,
             last_message: lastMsg?.content || "Начните беседу",
             last_message_time: lastMsg?.created_at || conv.created_at,
@@ -151,6 +181,42 @@ const Chats = () => {
       if (error) throw error;
 
       setNewMessage("");
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const requestMeeting = async () => {
+    if (!currentConversation || !user) return;
+
+    try {
+      const isUser1 = currentConversation.user1_id === user.id;
+      const updateField = isUser1 ? "meeting_requested_by_user1" : "meeting_requested_by_user2";
+
+      const { error } = await supabase
+        .from("conversations")
+        .update({ [updateField]: true })
+        .eq("id", currentConversation.id);
+
+      if (error) throw error;
+
+      // Send system message
+      await supabase
+        .from("messages")
+        .insert({
+          conversation_id: currentConversation.id,
+          sender_id: user.id,
+          content: "🗓️ Предложил(а) встретиться",
+        });
+
+      toast({
+        title: "Приглашение отправлено",
+        description: "Ждем подтверждения от собеседника",
+      });
     } catch (error: any) {
       toast({
         title: "Ошибка",
@@ -250,17 +316,43 @@ const Chats = () => {
               ))}
             </div>
 
-            <div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border p-4">
-              <div className="max-w-2xl mx-auto flex gap-2">
-                <Input
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Введите сообщение..."
-                  onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                />
-                <Button onClick={sendMessage} size="icon" variant="hero">
-                  <Send size={20} />
-                </Button>
+            <div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border p-4 space-y-2">
+              <div className="max-w-2xl mx-auto">
+                {currentConversation && !currentConversation.meeting_confirmed && (
+                  <Button
+                    onClick={requestMeeting}
+                    variant="outline"
+                    className="w-full mb-2"
+                    disabled={
+                      (currentConversation.user1_id === user!.id && currentConversation.meeting_requested_by_user1) ||
+                      (currentConversation.user2_id === user!.id && currentConversation.meeting_requested_by_user2)
+                    }
+                  >
+                    <Calendar className="mr-2" size={20} />
+                    {((currentConversation.user1_id === user!.id && currentConversation.meeting_requested_by_user1) ||
+                      (currentConversation.user2_id === user!.id && currentConversation.meeting_requested_by_user2))
+                      ? "Ожидаем подтверждения..."
+                      : "Давай встретимся"}
+                  </Button>
+                )}
+                {currentConversation?.meeting_confirmed && (
+                  <div className="bg-success/10 border border-success rounded-lg p-3 mb-2 text-center">
+                    <p className="text-sm font-semibold text-success">
+                      ✓ Встреча подтверждена! Теперь можете оценить встречу на странице Анкеты
+                    </p>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Введите сообщение..."
+                    onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                  />
+                  <Button onClick={sendMessage} size="icon" variant="hero">
+                    <Send size={20} />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
