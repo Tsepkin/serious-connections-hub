@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, Calendar, ArrowLeft } from "lucide-react";
+import { Heart, Calendar, ArrowLeft, MessageCircle, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReviewDialog from "@/components/ReviewDialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -180,6 +180,70 @@ const Profiles = () => {
     }
   };
 
+  const handleStartChat = async () => {
+    if (!currentProfile) return;
+
+    try {
+      const user1Id = user!.id < currentProfile.id ? user!.id : currentProfile.id;
+      const user2Id = user!.id < currentProfile.id ? currentProfile.id : user!.id;
+
+      const { data: existingConversation } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("user1_id", user1Id)
+        .eq("user2_id", user2Id)
+        .maybeSingle();
+
+      if (existingConversation) {
+        navigate("/chats");
+      } else {
+        await supabase
+          .from("conversations")
+          .insert({
+            user1_id: user1Id,
+            user2_id: user2Id,
+          });
+        navigate("/chats");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleLike = async () => {
+    if (!currentProfile) return;
+
+    try {
+      await supabase
+        .from("likes")
+        .insert({
+          user_id: user!.id,
+          liked_user_id: currentProfile.id,
+        });
+
+      toast({
+        title: "Лайк отправлен",
+        description: `Вы поставили лайк ${currentProfile.name}`,
+      });
+
+      nextProfile();
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDislike = () => {
+    nextProfile();
+  };
+
   const nextProfile = () => {
     if (currentIndex < profiles.length - 1) {
       setCurrentIndex(currentIndex + 1);
@@ -242,6 +306,36 @@ const Profiles = () => {
           <div className="p-6">
             <h3 className="font-semibold text-foreground mb-2">О себе</h3>
             <p className="text-muted-foreground">{currentProfile.about_me}</p>
+            
+            <div className="flex gap-3 mt-6">
+              <Button
+                onClick={handleStartChat}
+                className="flex-1"
+                variant="default"
+              >
+                <MessageCircle className="mr-2" size={20} />
+                Написать
+              </Button>
+            </div>
+
+            <div className="flex gap-3 mt-3">
+              <Button
+                onClick={handleLike}
+                className="flex-1"
+                variant="outline"
+              >
+                <ThumbsUp className="mr-2" size={20} />
+                Лайк
+              </Button>
+              <Button
+                onClick={handleDislike}
+                className="flex-1"
+                variant="outline"
+              >
+                <ThumbsDown className="mr-2" size={20} />
+                Дизлайк
+              </Button>
+            </div>
           </div>
         </div>
 
