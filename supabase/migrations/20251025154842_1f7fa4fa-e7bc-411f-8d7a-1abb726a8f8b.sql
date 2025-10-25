@@ -1,0 +1,73 @@
+-- Create a test user in auth.users
+INSERT INTO auth.users (
+  id,
+  instance_id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at,
+  confirmation_token,
+  email_change,
+  email_change_token_new,
+  recovery_token
+) VALUES (
+  '00000000-0000-0000-0000-000000000001'::uuid,
+  '00000000-0000-0000-0000-000000000000'::uuid,
+  'authenticated',
+  'authenticated',
+  'anna.test@example.com',
+  crypt('testpassword123', gen_salt('bf')),
+  now(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{}'::jsonb,
+  now(),
+  now(),
+  '',
+  '',
+  '',
+  ''
+) ON CONFLICT (id) DO NOTHING;
+
+-- Create profile for test user
+INSERT INTO profiles (
+  id,
+  name,
+  age,
+  gender,
+  city,
+  phone,
+  about_me,
+  values,
+  family_goals,
+  looking_for,
+  children,
+  smoking,
+  alcohol,
+  zodiac_sign,
+  photos,
+  honesty_rating,
+  total_ratings
+) VALUES (
+  '00000000-0000-0000-0000-000000000001'::uuid,
+  'Анна',
+  26,
+  'female',
+  'Москва',
+  '+79991234567',
+  'Привет! Я Анна, люблю путешествовать, читать книги и проводить время на природе. Ищу серьезные отношения с добрым и честным человеком.',
+  'Семья, честность, доверие, взаимопонимание',
+  'Хочу создать крепкую и счастливую семью, планирую детей в будущем',
+  'male',
+  'no',
+  'not_smoke',
+  'sometimes',
+  'Весы',
+  ARRAY['https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=600&fit=crop'],
+  95,
+  12
+) ON CONFLICT (id) DO NOTHING;
