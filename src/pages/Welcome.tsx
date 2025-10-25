@@ -39,7 +39,7 @@ const Welcome = () => {
             <Button 
               variant="hero" 
               size="xl"
-              onClick={() => navigate('/onboarding')}
+              onClick={() => navigate('/auth')}
               className="mb-16"
             >
               Начать серьезные отношения

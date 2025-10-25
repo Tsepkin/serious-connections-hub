@@ -4,7 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Welcome from "./pages/Welcome";
+import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
+import CreateProfile from "./pages/CreateProfile";
 import Profiles from "./pages/Profiles";
 import Chats from "./pages/Chats";
 import Profile from "./pages/Profile";
@@ -21,7 +23,9 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Welcome />} />
           <Route path="/welcome" element={<Welcome />} />
+          <Route path="/auth" element={<Auth />} />
           <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/create-profile" element={<CreateProfile />} />
           <Route path="/profiles" element={<Profiles />} />
           <Route path="/chats" element={<Chats />} />
           <Route path="/profile" element={<Profile />} />

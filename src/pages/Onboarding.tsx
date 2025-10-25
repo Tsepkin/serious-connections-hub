@@ -11,12 +11,12 @@ const Onboarding = () => {
     if (step < 3) {
       setStep(step + 1);
     } else {
-      navigate('/profiles');
+      navigate('/create-profile');
     }
   };
 
   const handleSkip = () => {
-    navigate('/profiles');
+    navigate('/create-profile');
   };
 
   return (
