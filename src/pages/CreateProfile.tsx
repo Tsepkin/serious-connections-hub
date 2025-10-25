@@ -23,6 +23,7 @@ const CreateProfile = () => {
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [isEditing, setIsEditing] = useState(false);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -59,10 +60,25 @@ const CreateProfile = () => {
         .maybeSingle();
       
       if (existingProfile) {
-        navigate("/profiles");
-      }
-      
-      if (session.user.phone) {
+        // Load existing profile data for editing
+        setIsEditing(true);
+        setFormData({
+          name: existingProfile.name,
+          age: existingProfile.age,
+          city: existingProfile.city,
+          phone: existingProfile.phone,
+          about_me: existingProfile.about_me,
+          values: existingProfile.values,
+          family_goals: existingProfile.family_goals,
+          gender: existingProfile.gender,
+          looking_for: existingProfile.looking_for,
+          children: existingProfile.children || "",
+          smoking: existingProfile.smoking || "",
+          alcohol: existingProfile.alcohol || "",
+          zodiac_sign: existingProfile.zodiac_sign || "",
+        });
+        setPhotos(existingProfile.photos || []);
+      } else if (session.user.phone) {
         setFormData(prev => ({ ...prev, phone: session.user.phone || "" }));
       }
     };
@@ -95,8 +111,7 @@ const CreateProfile = () => {
         return;
       }
 
-      const { error } = await supabase.from("profiles").insert([{
-        id: userId,
+      const profileData = {
         name: validation.data.name,
         age: validation.data.age,
         city: validation.data.city,
@@ -111,12 +126,26 @@ const CreateProfile = () => {
         alcohol: validation.data.alcohol,
         zodiac_sign: validation.data.zodiac_sign,
         photos: validation.data.photos || [],
-      }]);
+      };
+
+      let error;
+      if (isEditing) {
+        const result = await supabase
+          .from("profiles")
+          .update(profileData)
+          .eq("id", userId);
+        error = result.error;
+      } else {
+        const result = await supabase
+          .from("profiles")
+          .insert([{ id: userId, ...profileData }]);
+        error = result.error;
+      }
 
       if (error) throw error;
 
       toast({
-        title: "Профиль создан!",
+        title: isEditing ? "Профиль обновлен!" : "Профиль создан!",
         description: "Теперь вы можете начать знакомиться",
       });
 
@@ -136,7 +165,9 @@ const CreateProfile = () => {
     <div className="min-h-screen bg-gradient-subtle p-4">
       <div className="max-w-2xl mx-auto">
         <Card className="p-6 md:p-8">
-          <h2 className="text-2xl font-bold text-foreground mb-6">Создайте свою анкету</h2>
+          <h2 className="text-2xl font-bold text-foreground mb-6">
+            {isEditing ? "Редактировать профиль" : "Создайте свою анкету"}
+          </h2>
           
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Photos Section */}
@@ -342,7 +373,7 @@ const CreateProfile = () => {
                   Создание...
                 </>
               ) : (
-                "Создать профиль"
+                isEditing ? "Сохранить изменения" : "Создать профиль"
               )}
             </Button>
             
