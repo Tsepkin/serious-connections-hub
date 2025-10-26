@@ -12,6 +12,8 @@ interface Conversation {
   id: string;
   user1_id: string;
   user2_id: string;
+  meeting_requested_by_user1: boolean;
+  meeting_requested_by_user2: boolean;
   meeting_confirmed: boolean;
   other_user: {
     id: string;
@@ -104,6 +106,8 @@ const Chats = () => {
           id,
           user1_id,
           user2_id,
+          meeting_requested_by_user1,
+          meeting_requested_by_user2,
           meeting_confirmed,
           user1:profiles!conversations_user1_id_fkey(id, name, photos),
           user2:profiles!conversations_user2_id_fkey(id, name, photos)
@@ -128,6 +132,8 @@ const Chats = () => {
             id: conv.id,
             user1_id: conv.user1_id,
             user2_id: conv.user2_id,
+            meeting_requested_by_user1: conv.meeting_requested_by_user1,
+            meeting_requested_by_user2: conv.meeting_requested_by_user2,
             meeting_confirmed: conv.meeting_confirmed,
             other_user: otherUser,
             last_message: lastMsg?.content || "Начните беседу",
@@ -196,12 +202,13 @@ const Chats = () => {
     if (!currentConversation || !user) return;
 
     try {
+      const isUser1 = currentConversation.user1_id === user.id;
+      const updateField = isUser1 ? "meeting_requested_by_user1" : "meeting_requested_by_user2";
+      const otherUserRequested = isUser1 ? currentConversation.meeting_requested_by_user2 : currentConversation.meeting_requested_by_user1;
+
       const { error } = await supabase
         .from("conversations")
-        .update({ 
-          meeting_confirmed: true,
-          meeting_date: new Date().toISOString()
-        })
+        .update({ [updateField]: true })
         .eq("id", currentConversation.id);
 
       if (error) throw error;
@@ -212,12 +219,12 @@ const Chats = () => {
         .insert({
           conversation_id: currentConversation.id,
           sender_id: user.id,
-          content: "🗓️ Встреча подтверждена!",
+          content: otherUserRequested ? "🗓️ Встреча подтверждена!" : "🗓️ Предложил(а) встретиться",
         });
 
       toast({
-        title: "Встреча подтверждена!",
-        description: "Не забудьте оценить встречу после",
+        title: otherUserRequested ? "Встреча подтверждена!" : "Приглашение отправлено",
+        description: otherUserRequested ? "Не забудьте оценить встречу после" : "Ждем подтверждения от собеседника",
       });
     } catch (error: any) {
       toast({
@@ -325,9 +332,16 @@ const Chats = () => {
                     onClick={requestMeeting}
                     variant="outline"
                     className="w-full mb-2"
+                    disabled={
+                      (currentConversation.user1_id === user!.id && currentConversation.meeting_requested_by_user1) ||
+                      (currentConversation.user2_id === user!.id && currentConversation.meeting_requested_by_user2)
+                    }
                   >
                     <Calendar className="mr-2" size={20} />
-                    Давай встретимся
+                    {((currentConversation.user1_id === user!.id && currentConversation.meeting_requested_by_user1) ||
+                      (currentConversation.user2_id === user!.id && currentConversation.meeting_requested_by_user2))
+                      ? "Ожидаем подтверждения..."
+                      : "Давай встретимся"}
                   </Button>
                 )}
                 {currentConversation?.meeting_confirmed && (

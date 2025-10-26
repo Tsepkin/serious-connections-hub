@@ -20,6 +20,8 @@ export type Database = {
           id: string
           meeting_confirmed: boolean | null
           meeting_date: string | null
+          meeting_requested_by_user1: boolean | null
+          meeting_requested_by_user2: boolean | null
           ready_for_meeting: boolean | null
           user1_id: string
           user2_id: string
@@ -29,6 +31,8 @@ export type Database = {
           id?: string
           meeting_confirmed?: boolean | null
           meeting_date?: string | null
+          meeting_requested_by_user1?: boolean | null
+          meeting_requested_by_user2?: boolean | null
           ready_for_meeting?: boolean | null
           user1_id: string
           user2_id: string
@@ -38,6 +42,8 @@ export type Database = {
           id?: string
           meeting_confirmed?: boolean | null
           meeting_date?: string | null
+          meeting_requested_by_user1?: boolean | null
+          meeting_requested_by_user2?: boolean | null
           ready_for_meeting?: boolean | null
           user1_id?: string
           user2_id?: string

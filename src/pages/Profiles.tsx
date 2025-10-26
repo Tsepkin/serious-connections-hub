@@ -20,6 +20,15 @@ interface Profile {
   looking_for: string;
 }
 
+interface Review {
+  id: string;
+  reviewer_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  reviewer_name: string;
+}
+
 const Profiles = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -30,6 +39,8 @@ const Profiles = () => {
   const [meetingConfirmed, setMeetingConfirmed] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [showReviewDialog, setShowReviewDialog] = useState(false);
+  const [likesCount, setLikesCount] = useState(0);
+  const [reviews, setReviews] = useState<Review[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -41,6 +52,7 @@ const Profiles = () => {
     const currentProfile = profiles[currentIndex];
     if (currentProfile) {
       checkMeetingStatus();
+      fetchProfileStats();
     }
   }, [currentIndex, profiles]);
 
@@ -85,6 +97,45 @@ const Profiles = () => {
 
     setMeetingConfirmed(!!conversation);
     setConversationId(conversation?.id || null);
+  };
+
+  const fetchProfileStats = async () => {
+    const profile = profiles[currentIndex];
+    if (!profile) return;
+
+    // Fetch likes count
+    const { count: likesCount } = await supabase
+      .from("likes")
+      .select("*", { count: 'exact', head: true })
+      .eq("liked_user_id", profile.id);
+
+    setLikesCount(likesCount || 0);
+
+    // Fetch reviews with reviewer names
+    const { data: reviewsData } = await supabase
+      .from("reviews")
+      .select(`
+        id,
+        reviewer_id,
+        rating,
+        comment,
+        created_at,
+        profiles!reviews_reviewer_id_fkey(name)
+      `)
+      .eq("reviewed_id", profile.id)
+      .order("created_at", { ascending: false });
+
+    if (reviewsData) {
+      const formattedReviews = reviewsData.map((review: any) => ({
+        id: review.id,
+        reviewer_id: review.reviewer_id,
+        rating: review.rating,
+        comment: review.comment,
+        created_at: review.created_at,
+        reviewer_name: review.profiles?.name || "Аноним",
+      }));
+      setReviews(formattedReviews);
+    }
   };
 
   const confirmMeeting = async () => {
@@ -226,7 +277,16 @@ const Profiles = () => {
     }
   };
 
-  const handleDislike = () => {
+  const handleDislike = async () => {
+    if (!currentProfile || !meetingConfirmed) {
+      toast({
+        title: "Ошибка",
+        description: "Дизлайк можно поставить только после встречи",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     nextProfile();
   };
 
@@ -284,9 +344,17 @@ const Profiles = () => {
               <h2 className="text-3xl font-bold mb-2">{currentProfile.name}, {currentProfile.age}</h2>
               <p className="text-white/90">{currentProfile.city}</p>
             </div>
-            <div className="absolute top-4 right-4 bg-card/95 backdrop-blur-sm rounded-2xl px-4 py-2">
-              <div className="text-xs text-muted-foreground">Рейтинг</div>
-              <div className="text-lg font-bold text-primary">{currentProfile.honesty_rating}%</div>
+            <div className="absolute top-4 right-4 bg-card/95 backdrop-blur-sm rounded-2xl px-4 py-2 flex items-center gap-3">
+              <div>
+                <div className="text-xs text-muted-foreground">Рейтинг</div>
+                <div className="text-lg font-bold text-primary">{currentProfile.honesty_rating}%</div>
+              </div>
+              <div className="border-l border-border pl-3">
+                <div className="flex items-center gap-1 text-success">
+                  <ThumbsUp size={16} />
+                  <span className="text-sm font-semibold">{likesCount}</span>
+                </div>
+              </div>
             </div>
           </div>
           <div className="p-6">
@@ -304,24 +372,54 @@ const Profiles = () => {
               </Button>
             </div>
 
-            <div className="flex gap-3 mt-3">
-              <Button
-                onClick={handleLike}
-                className="flex-1"
-                variant="outline"
-              >
-                <ThumbsUp className="mr-2" size={20} />
-                Лайк
-              </Button>
-              <Button
-                onClick={handleDislike}
-                className="flex-1"
-                variant="outline"
-              >
-                <ThumbsDown className="mr-2" size={20} />
-                Дизлайк
-              </Button>
-            </div>
+            {meetingConfirmed && (
+              <div className="flex gap-3 mt-3">
+                <Button
+                  onClick={handleLike}
+                  className="flex-1"
+                  variant="outline"
+                >
+                  <ThumbsUp className="mr-2" size={20} />
+                  Лайк
+                </Button>
+                <Button
+                  onClick={handleDislike}
+                  className="flex-1"
+                  variant="outline"
+                >
+                  <ThumbsDown className="mr-2" size={20} />
+                  Дизлайк
+                </Button>
+              </div>
+            )}
+
+            {reviews.length > 0 && (
+              <div className="mt-6">
+                <h3 className="font-semibold text-foreground mb-3">Отзывы ({reviews.length})</h3>
+                <div className="space-y-3">
+                  {reviews.map((review) => (
+                    <div key={review.id} className="bg-muted/50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-foreground">{review.reviewer_name}</span>
+                        <div className="flex items-center gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <span key={i} className={i < review.rating ? "text-primary" : "text-muted-foreground"}>
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {review.comment && (
+                        <p className="text-sm text-muted-foreground">{review.comment}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {new Date(review.created_at).toLocaleDateString("ru-RU")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
