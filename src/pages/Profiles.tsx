@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, Calendar, ArrowLeft, MessageCircle, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Heart, Calendar, ArrowLeft, MessageCircle, ThumbsUp, ThumbsDown, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReviewDialog from "@/components/ReviewDialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -499,7 +499,7 @@ const Profiles = () => {
             <span className="text-xs text-muted-foreground">Диалоги</span>
           </Button>
           <Button variant="ghost" className="flex flex-col items-center gap-1" onClick={() => navigate("/profile")}>
-            <span className="text-2xl">👤</span>
+            <User size={24} className="text-muted-foreground" />
             <span className="text-xs text-muted-foreground">Профиль</span>
           </Button>
         </div>
