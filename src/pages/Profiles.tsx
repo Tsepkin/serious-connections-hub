@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, Calendar, ArrowLeft, MessageCircle, ThumbsUp, ThumbsDown, User } from "lucide-react";
+import { Heart, Calendar, ArrowLeft, MessageCircle, ThumbsUp, ThumbsDown, User, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReviewDialog from "@/components/ReviewDialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,6 +42,10 @@ const Profiles = () => {
   const [likesCount, setLikesCount] = useState(0);
   const [dislikesCount, setDislikesCount] = useState(0);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -327,6 +331,37 @@ const Profiles = () => {
     }
   };
 
+  const handleSkip = () => {
+    setSwipeDirection('left');
+    setTimeout(() => {
+      nextProfile();
+      setSwipeDirection(null);
+    }, 300);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+    
+    if (isLeftSwipe) {
+      handleSkip();
+    } else if (isRightSwipe) {
+      handleLike();
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
@@ -362,7 +397,15 @@ const Profiles = () => {
       </div>
 
       <div className="p-4 max-w-2xl mx-auto">
-        <div className="bg-card rounded-3xl shadow-card overflow-hidden">
+        <div 
+          ref={cardRef}
+          className={`bg-card rounded-3xl shadow-card overflow-hidden transition-all duration-300 ${
+            swipeDirection === 'left' ? 'animate-slide-out-right opacity-0' : ''
+          }`}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
           <div className="relative aspect-[3/4] bg-muted">
             <img 
               src={currentProfile.photos[0] || "/placeholder.svg"}
@@ -396,12 +439,28 @@ const Profiles = () => {
             
             <div className="flex gap-3 mt-6">
               <Button
+                onClick={handleSkip}
+                variant="outline"
+                size="icon"
+                className="h-14 w-14 rounded-full hover:border-muted-foreground"
+              >
+                <X size={24} />
+              </Button>
+              <Button
                 onClick={handleStartChat}
                 className="flex-1"
                 variant="default"
               >
                 <MessageCircle className="mr-2" size={20} />
                 Написать
+              </Button>
+              <Button
+                onClick={handleLike}
+                variant="outline"
+                size="icon"
+                className="h-14 w-14 rounded-full hover:border-primary hover:text-primary"
+              >
+                <Heart size={24} />
               </Button>
             </div>
 
