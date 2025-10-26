@@ -100,8 +100,22 @@ const Profiles = () => {
       .eq("meeting_confirmed", true)
       .maybeSingle();
 
-    setMeetingConfirmed(!!conversation);
-    setConversationId(conversation?.id || null);
+    if (conversation) {
+      // Check if user already left a review
+      const { data: existingReview } = await supabase
+        .from("reviews")
+        .select("id")
+        .eq("reviewer_id", user!.id)
+        .eq("conversation_id", conversation.id)
+        .maybeSingle();
+
+      // Show button only if meeting is confirmed and user hasn't reviewed yet
+      setMeetingConfirmed(!existingReview);
+      setConversationId(conversation.id);
+    } else {
+      setMeetingConfirmed(false);
+      setConversationId(null);
+    }
   };
 
   const fetchProfileStats = async () => {
@@ -238,8 +252,8 @@ const Profiles = () => {
         description: "Спасибо за вашу оценку!",
       });
 
-      // Refresh reviews and stats instead of moving to next profile
-      await fetchProfileStats();
+      // Refresh reviews, stats and meeting status
+      await Promise.all([fetchProfileStats(), checkMeetingStatus()]);
     } catch (error: any) {
       console.error("Error in submitReview:", error);
       toast({
