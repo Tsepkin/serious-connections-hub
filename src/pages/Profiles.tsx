@@ -40,6 +40,7 @@ const Profiles = () => {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
+  const [dislikesCount, setDislikesCount] = useState(0);
   const [reviews, setReviews] = useState<Review[]>([]);
 
   useEffect(() => {
@@ -110,6 +111,14 @@ const Profiles = () => {
       .eq("liked_user_id", profile.id);
 
     setLikesCount(likesCount || 0);
+
+    // Fetch dislikes count
+    const { count: dislikesCount } = await supabase
+      .from("dislikes")
+      .select("*", { count: 'exact', head: true })
+      .eq("disliked_user_id", profile.id);
+
+    setDislikesCount(dislikesCount || 0);
 
     // Fetch reviews with reviewer names
     const { data: reviewsData } = await supabase
@@ -286,8 +295,28 @@ const Profiles = () => {
       });
       return;
     }
-    
-    nextProfile();
+
+    try {
+      await supabase
+        .from("dislikes")
+        .insert({
+          user_id: user!.id,
+          disliked_user_id: currentProfile.id,
+        });
+
+      toast({
+        title: "Дизлайк отправлен",
+        description: `Вы поставили дизлайк ${currentProfile.name}`,
+      });
+
+      nextProfile();
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const nextProfile = () => {
@@ -349,10 +378,14 @@ const Profiles = () => {
                 <div className="text-xs text-muted-foreground">Рейтинг</div>
                 <div className="text-lg font-bold text-primary">{currentProfile.honesty_rating}%</div>
               </div>
-              <div className="border-l border-border pl-3">
+              <div className="border-l border-border pl-3 flex items-center gap-3">
                 <div className="flex items-center gap-1 text-success">
                   <ThumbsUp size={16} />
                   <span className="text-sm font-semibold">{likesCount}</span>
+                </div>
+                <div className="flex items-center gap-1 text-destructive">
+                  <ThumbsDown size={16} />
+                  <span className="text-sm font-semibold">{dislikesCount}</span>
                 </div>
               </div>
             </div>

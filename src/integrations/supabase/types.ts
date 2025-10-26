@@ -65,6 +65,27 @@ export type Database = {
           },
         ]
       }
+      dislikes: {
+        Row: {
+          created_at: string | null
+          disliked_user_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          disliked_user_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          disliked_user_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       likes: {
         Row: {
           created_at: string | null
