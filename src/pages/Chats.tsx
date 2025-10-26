@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Heart, Send, Calendar } from "lucide-react";
+import { Heart, Send, Calendar, MessageCircle, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -375,11 +375,11 @@ const Chats = () => {
             <span className="text-xs text-muted-foreground">Анкеты</span>
           </Button>
           <Button variant="ghost" className="flex flex-col items-center gap-1">
-            <span className="text-2xl">💬</span>
+            <MessageCircle size={24} className="text-primary" />
             <span className="text-xs text-primary font-semibold">Диалоги</span>
           </Button>
           <Button variant="ghost" className="flex flex-col items-center gap-1" onClick={() => navigate("/profile")}>
-            <span className="text-2xl">👤</span>
+            <User size={24} className="text-muted-foreground" />
             <span className="text-xs text-muted-foreground">Профиль</span>
           </Button>
         </div>
