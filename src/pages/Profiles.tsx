@@ -160,6 +160,8 @@ const Profiles = () => {
     if (!currentProfile || !conversationId) return;
 
     try {
+      console.log("Submitting review...", { rating, comment, isLike, conversationId });
+      
       // Create meeting record
       const user1Id = user!.id < currentProfile.id ? user!.id : currentProfile.id;
       const user2Id = user!.id < currentProfile.id ? currentProfile.id : user!.id;
@@ -174,22 +176,32 @@ const Profiles = () => {
 
       if (existingMeeting) {
         const updateField = isUser1 ? "confirmed_by_user1" : "confirmed_by_user2";
-        await supabase
+        const { error: updateError } = await supabase
           .from("meetings")
           .update({ [updateField]: true })
           .eq("id", existingMeeting.id);
+        
+        if (updateError) {
+          console.error("Error updating meeting:", updateError);
+          throw updateError;
+        }
       } else {
-        await supabase
+        const { error: insertError } = await supabase
           .from("meetings")
           .insert({
             user1_id: user1Id,
             user2_id: user2Id,
             [isUser1 ? "confirmed_by_user1" : "confirmed_by_user2"]: true,
           });
+        
+        if (insertError) {
+          console.error("Error creating meeting:", insertError);
+          throw insertError;
+        }
       }
 
       // Create review
-      await supabase
+      const { error: reviewError } = await supabase
         .from("reviews")
         .insert({
           reviewer_id: user!.id,
@@ -199,13 +211,25 @@ const Profiles = () => {
           comment: comment || null,
         });
 
+      if (reviewError) {
+        console.error("Error creating review:", reviewError);
+        throw reviewError;
+      }
+
+      console.log("Review created successfully");
+
       if (isLike) {
-        await supabase
+        const { error: likeError } = await supabase
           .from("likes")
           .insert({
             user_id: user!.id,
             liked_user_id: currentProfile.id,
           });
+        
+        if (likeError) {
+          console.error("Error creating like:", likeError);
+          // Don't throw, continue anyway
+        }
       }
 
       setShowReviewDialog(false);
@@ -214,11 +238,13 @@ const Profiles = () => {
         description: "Спасибо за вашу оценку!",
       });
 
-      nextProfile();
+      // Refresh reviews and stats instead of moving to next profile
+      await fetchProfileStats();
     } catch (error: any) {
+      console.error("Error in submitReview:", error);
       toast({
         title: "Ошибка",
-        description: error.message,
+        description: error.message || "Не удалось отправить отзыв",
         variant: "destructive",
       });
     }
