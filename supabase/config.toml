@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.generate-bot-photo]
 verify_jwt = false
+
+[functions.update-bot-photos]
+verify_jwt = false

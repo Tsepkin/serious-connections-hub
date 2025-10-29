@@ -8,6 +8,7 @@ import { Loader2, UserPlus, MessageSquare } from "lucide-react";
 const AdminBots = () => {
   const [creatingBots, setCreatingBots] = useState(false);
   const [processingResponses, setProcessingResponses] = useState(false);
+  const [updatingPhotos, setUpdatingPhotos] = useState(false);
 
   const createBots = async () => {
     setCreatingBots(true);
@@ -53,6 +54,28 @@ const AdminBots = () => {
     }
   }, []);
 
+  const updateBotPhotos = async () => {
+    setUpdatingPhotos(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('update-bot-photos');
+      
+      if (error) throw error;
+
+      toast({
+        title: "Фото обновлены!",
+        description: `Обновлено: ${data.updated}/${data.total} ботов`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingPhotos(false);
+    }
+  };
+
   // Auto-process every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => {
@@ -70,7 +93,7 @@ const AdminBots = () => {
           <p className="text-muted-foreground">Создавайте ботов и управляйте их ответами</p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-3">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -98,6 +121,36 @@ const AdminBots = () => {
                     <UserPlus className="mr-2 h-4 w-4" />
                     Создать 50 ботов
                   </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                Обновить фото
+              </CardTitle>
+              <CardDescription>
+                Сгенерировать AI фото для всех ботов
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={updateBotPhotos}
+                disabled={updatingPhotos}
+                variant="secondary"
+                className="w-full"
+                size="lg"
+              >
+                {updatingPhotos ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Генерация...
+                  </>
+                ) : (
+                  "Обновить фото"
                 )}
               </Button>
             </CardContent>
