@@ -91,6 +91,16 @@ serve(async (req) => {
 
       if (recentBotMessage) continue;
 
+      // Check if bot is already typing
+      const { data: existingTyping } = await supabase
+        .from('typing_indicators')
+        .select('is_typing')
+        .eq('conversation_id', conv.id)
+        .eq('user_id', botId)
+        .maybeSingle();
+
+      if (existingTyping?.is_typing) continue; // Skip if bot is already typing
+
       // Set typing indicator to true before generating response
       await supabase
         .from('typing_indicators')
