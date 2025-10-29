@@ -66,16 +66,26 @@ const Profiles = () => {
       console.log("Fetching profiles...");
       
       // Fetch all profiles except the current user
-      const { data, error } = await supabase
+      const { data: userProfiles, error: userError } = await supabase
         .from("profiles")
         .select("*")
         .neq("id", user!.id);
 
-      console.log("Fetched profiles:", data);
+      if (userError) throw userError;
 
-      if (error) throw error;
+      // Fetch bot profiles
+      const { data: botProfiles, error: botError } = await supabase
+        .from("bot_profiles")
+        .select("*");
 
-      setProfiles(data || []);
+      if (botError) throw botError;
+
+      // Combine and shuffle profiles
+      const allProfiles = [...(userProfiles || []), ...(botProfiles || [])];
+      const shuffled = allProfiles.sort(() => Math.random() - 0.5);
+
+      console.log("Fetched profiles:", shuffled);
+      setProfiles(shuffled);
     } catch (error: any) {
       console.error("Error in fetchProfiles:", error);
       toast({

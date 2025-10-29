@@ -14,6 +14,124 @@ export type Database = {
   }
   public: {
     Tables: {
+      bot_profiles: {
+        Row: {
+          about_me: string
+          age: number
+          alcohol: string | null
+          children: string | null
+          city: string
+          created_at: string | null
+          family_goals: string
+          gender: string
+          honesty_rating: number | null
+          id: string
+          looking_for: string
+          name: string
+          phone: string
+          photos: string[] | null
+          smoking: string | null
+          total_ratings: number | null
+          updated_at: string | null
+          values: string
+          zodiac_sign: string | null
+        }
+        Insert: {
+          about_me: string
+          age: number
+          alcohol?: string | null
+          children?: string | null
+          city: string
+          created_at?: string | null
+          family_goals: string
+          gender: string
+          honesty_rating?: number | null
+          id?: string
+          looking_for: string
+          name: string
+          phone: string
+          photos?: string[] | null
+          smoking?: string | null
+          total_ratings?: number | null
+          updated_at?: string | null
+          values: string
+          zodiac_sign?: string | null
+        }
+        Update: {
+          about_me?: string
+          age?: number
+          alcohol?: string | null
+          children?: string | null
+          city?: string
+          created_at?: string | null
+          family_goals?: string
+          gender?: string
+          honesty_rating?: number | null
+          id?: string
+          looking_for?: string
+          name?: string
+          phone?: string
+          photos?: string[] | null
+          smoking?: string | null
+          total_ratings?: number | null
+          updated_at?: string | null
+          values?: string
+          zodiac_sign?: string | null
+        }
+        Relationships: []
+      }
+      bot_response_queue: {
+        Row: {
+          bot_id: string
+          conversation_id: string
+          created_at: string | null
+          id: string
+          message_id: string
+          processed: boolean | null
+          scheduled_at: string
+        }
+        Insert: {
+          bot_id: string
+          conversation_id: string
+          created_at?: string | null
+          id?: string
+          message_id: string
+          processed?: boolean | null
+          scheduled_at: string
+        }
+        Update: {
+          bot_id?: string
+          conversation_id?: string
+          created_at?: string | null
+          id?: string
+          message_id?: string
+          processed?: boolean | null
+          scheduled_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_response_queue_bot_id_fkey"
+            columns: ["bot_id"]
+            isOneToOne: false
+            referencedRelation: "bot_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_response_queue_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_response_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           created_at: string | null
@@ -215,6 +333,7 @@ export type Database = {
           gender: string | null
           honesty_rating: number | null
           id: string
+          is_bot: boolean | null
           looking_for: string | null
           name: string
           phone: string
@@ -237,6 +356,7 @@ export type Database = {
           gender?: string | null
           honesty_rating?: number | null
           id: string
+          is_bot?: boolean | null
           looking_for?: string | null
           name: string
           phone: string
@@ -259,6 +379,7 @@ export type Database = {
           gender?: string | null
           honesty_rating?: number | null
           id?: string
+          is_bot?: boolean | null
           looking_for?: string | null
           name?: string
           phone?: string
