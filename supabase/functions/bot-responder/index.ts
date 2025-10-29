@@ -153,8 +153,8 @@ serve(async (req) => {
       const botMessage = aiData.choices?.[0]?.message?.content;
 
       if (botMessage) {
-        // Simulate typing delay based on message length (50-100ms per character, max 3 seconds)
-        const typingDelay = Math.min(botMessage.length * 70, 3000);
+        // Simulate typing delay based on message length (min 1.5s, max 5s)
+        const typingDelay = Math.max(1500, Math.min(botMessage.length * 70, 5000));
         await new Promise(resolve => setTimeout(resolve, typingDelay));
 
         // Send bot message
