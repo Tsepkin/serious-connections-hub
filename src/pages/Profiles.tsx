@@ -65,24 +65,24 @@ const Profiles = () => {
     try {
       console.log("Fetching profiles...");
       
-      // Fetch all profiles except the current user
-      const { data: userProfiles, error: userError } = await supabase
+      // Get user's profile to filter by looking_for
+      const { data: myProfile } = await supabase
+        .from("profiles")
+        .select("looking_for")
+        .eq("id", user!.id)
+        .single();
+
+      // Fetch profiles excluding current user and matching gender preferences
+      const { data: allProfiles, error } = await supabase
         .from("profiles")
         .select("*")
-        .neq("id", user!.id);
+        .neq("id", user!.id)
+        .eq("gender", myProfile?.looking_for || "female");
 
-      if (userError) throw userError;
+      if (error) throw error;
 
-      // Fetch bot profiles
-      const { data: botProfiles, error: botError } = await supabase
-        .from("bot_profiles")
-        .select("*");
-
-      if (botError) throw botError;
-
-      // Combine and shuffle profiles
-      const allProfiles = [...(userProfiles || []), ...(botProfiles || [])];
-      const shuffled = allProfiles.sort(() => Math.random() - 0.5);
+      // Shuffle profiles
+      const shuffled = (allProfiles || []).sort(() => Math.random() - 0.5);
 
       console.log("Fetched profiles:", shuffled);
       setProfiles(shuffled);
