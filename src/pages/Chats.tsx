@@ -247,6 +247,12 @@ const Chats = () => {
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedChat) return;
 
+    console.log('Attempting to send message:', { 
+      messageLength: newMessage.trim().length, 
+      selectedChat,
+      userId: user?.id 
+    });
+
     try {
       // Clear typing status
       await updateTypingStatus(false);
@@ -259,8 +265,12 @@ const Chats = () => {
           content: newMessage.trim(),
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error sending message:', error);
+        throw error;
+      }
 
+      console.log('Message sent successfully');
       setNewMessage("");
 
       // Trigger bot response immediately
@@ -271,6 +281,7 @@ const Chats = () => {
         // Don't show error to user, just log it
       }
     } catch (error: any) {
+      console.error('Send message error:', error);
       toast({
         title: "Ошибка",
         description: error.message,
