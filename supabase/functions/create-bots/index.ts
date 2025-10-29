@@ -84,7 +84,7 @@ serve(async (req) => {
         continue;
       }
 
-      // Create profile
+      // Create profile (bots are created in main profiles table)
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
