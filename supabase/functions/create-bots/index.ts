@@ -127,7 +127,8 @@ serve(async (req) => {
           looking_for: gender === 'male' ? 'female' : 'male',
           photo_url: photoUrl,
           photos: photoUrl ? [photoUrl] : [],
-          is_bot: true
+          is_bot: true,
+          rank: Math.floor(Math.random() * 3) + 1 // Random rank 1-3
         });
 
       if (profileError) {

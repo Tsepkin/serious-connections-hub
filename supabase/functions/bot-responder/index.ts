@@ -46,13 +46,13 @@ serve(async (req) => {
       // Determine which user is bot
       const { data: user1 } = await supabase
         .from('profiles')
-        .select('is_bot, name, about_me, values')
+        .select('is_bot, name, about_me, values, rank')
         .eq('id', conv.user1_id)
         .maybeSingle();
       
       const { data: user2 } = await supabase
         .from('profiles')
-        .select('is_bot, name, about_me, values')
+        .select('is_bot, name, about_me, values, rank')
         .eq('id', conv.user2_id)
         .maybeSingle();
 
@@ -60,6 +60,21 @@ serve(async (req) => {
       const botId = user1?.is_bot ? conv.user1_id : (user2?.is_bot ? conv.user2_id : null);
 
       if (!botId || !botProfile) continue;
+
+      // Check bot rank and apply delay
+      const botRank = botProfile.rank || 1;
+      if (botRank === 3) {
+        // Rank 3 bots respond after ~30 minutes
+        const { data: recentBotMessage } = await supabase
+          .from('messages')
+          .select('created_at')
+          .eq('conversation_id', conv.id)
+          .eq('sender_id', botId)
+          .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
+          .maybeSingle();
+
+        if (recentBotMessage) continue; // Skip if bot already responded recently
+      }
 
       // Get last message
       const lastMessage = conv.messages?.[0];
@@ -89,6 +104,16 @@ serve(async (req) => {
         content: m.content
       })) || [];
 
+      // Prepare personality based on rank
+      let personality = '';
+      if (botRank === 1) {
+        personality = 'Будь очень дружелюбным, добрым и отзывчивым. Проявляй искренний интерес к собеседнику.';
+      } else if (botRank === 2) {
+        personality = 'Будь нейтральным и сдержанным в общении. Отвечай вежливо, но без излишнего энтузиазма.';
+      } else {
+        personality = 'Будь сухим и неохотным в общении. Отвечай кратко, без особого желания продолжать разговор.';
+      }
+
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -100,7 +125,7 @@ serve(async (req) => {
           messages: [
             {
               role: 'system',
-              content: `Ты ${botProfile.name}, пользователь сайта знакомств. О тебе: ${botProfile.about_me}. Твои ценности: ${botProfile.values}. Отвечай естественно, как реальный человек. Будь дружелюбным и заинтересованным. Пиши короткие сообщения (1-3 предложения). Задавай вопросы, чтобы поддержать разговор. Используй эмодзи изредка.`
+              content: `Ты ${botProfile.name}, пользователь сайта знакомств. О тебе: ${botProfile.about_me}. Твои ценности: ${botProfile.values}. ${personality} Отвечай естественно, как реальный человек. Пиши короткие сообщения (1-2 предложения). НЕ ИСПОЛЬЗУЙ эмодзи вообще. Задавай вопросы, чтобы поддержать разговор.`
             },
             ...conversationHistory
           ],

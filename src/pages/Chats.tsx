@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Heart, Send, Calendar, MessageCircle, User } from "lucide-react";
+import { Heart, Send, Calendar, MessageCircle, User, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +42,8 @@ const Chats = () => {
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
+  const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -90,13 +92,28 @@ const Chats = () => {
             setConversations(prev => prev.map(c => c.id === selectedChat ? { ...c, ...updated } : c));
           }
         )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'typing_indicators',
+            filter: `conversation_id=eq.${selectedChat}`,
+          },
+          (payload) => {
+            const typingData = payload.new as any;
+            if (typingData.user_id !== user!.id) {
+              setIsOtherUserTyping(typingData.is_typing);
+            }
+          }
+        )
         .subscribe();
 
       return () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [selectedChat, conversations]);
+  }, [selectedChat, conversations, user]);
 
   const fetchConversations = async () => {
     try {
@@ -174,10 +191,51 @@ const Chats = () => {
     }
   };
 
+  const updateTypingStatus = async (isTyping: boolean) => {
+    if (!selectedChat || !user) return;
+
+    try {
+      await supabase
+        .from("typing_indicators")
+        .upsert({
+          conversation_id: selectedChat,
+          user_id: user.id,
+          is_typing: isTyping,
+          updated_at: new Date().toISOString(),
+        });
+    } catch (error) {
+      console.error('Error updating typing status:', error);
+    }
+  };
+
+  const handleInputChange = (value: string) => {
+    setNewMessage(value);
+
+    // Clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set typing to true
+    if (value.trim()) {
+      updateTypingStatus(true);
+
+      // Set timeout to stop typing after 2 seconds of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        updateTypingStatus(false);
+      }, 2000);
+    } else {
+      updateTypingStatus(false);
+    }
+  };
+
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedChat) return;
 
     try {
+      // Clear typing status
+      await updateTypingStatus(false);
+
       const { error } = await supabase
         .from("messages")
         .insert({
@@ -331,6 +389,14 @@ const Chats = () => {
                   </div>
                 </div>
               ))}
+              {isOtherUserTyping && (
+                <div className="flex justify-start">
+                  <div className="max-w-[70%] p-3 rounded-2xl bg-muted text-foreground flex items-center gap-2">
+                    <Pencil size={16} className="animate-pulse" />
+                    <span className="text-sm text-muted-foreground">печатает...</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border p-4 space-y-2">
@@ -362,7 +428,7 @@ const Chats = () => {
                 <div className="flex gap-2">
                   <Input
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    onChange={(e) => handleInputChange(e.target.value)}
                     placeholder="Введите сообщение..."
                     onKeyPress={(e) => e.key === "Enter" && sendMessage()}
                   />

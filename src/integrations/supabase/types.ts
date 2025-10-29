@@ -221,6 +221,7 @@ export type Database = {
           phone: string
           photo_url: string | null
           photos: string[] | null
+          rank: number | null
           smoking: string | null
           total_ratings: number | null
           updated_at: string | null
@@ -244,6 +245,7 @@ export type Database = {
           phone: string
           photo_url?: string | null
           photos?: string[] | null
+          rank?: number | null
           smoking?: string | null
           total_ratings?: number | null
           updated_at?: string | null
@@ -267,6 +269,7 @@ export type Database = {
           phone?: string
           photo_url?: string | null
           photos?: string[] | null
+          rank?: number | null
           smoking?: string | null
           total_ratings?: number | null
           updated_at?: string | null
@@ -323,6 +326,38 @@ export type Database = {
             columns: ["reviewer_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      typing_indicators: {
+        Row: {
+          conversation_id: string
+          id: string
+          is_typing: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          id?: string
+          is_typing?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          id?: string
+          is_typing?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "typing_indicators_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
         ]
