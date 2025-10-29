@@ -82,8 +82,16 @@ serve(async (req) => {
       
       if (!lastMessage) continue;
       
-      // Skip if last message is from bot
-      if (lastMessage.sender_id === botId) continue;
+      // CRITICAL: Skip if last message is from bot - bot should not respond to itself
+      if (lastMessage.sender_id === botId) {
+        // Make sure typing indicator is cleared if it exists
+        await supabase
+          .from('typing_indicators')
+          .delete()
+          .eq('conversation_id', conv.id)
+          .eq('user_id', botId);
+        continue;
+      }
       
       // Skip if bot already responded to this message (check if there's a bot message after the last user message)
       const { data: botResponseExists } = await supabase
@@ -94,7 +102,15 @@ serve(async (req) => {
         .gt('created_at', lastMessage.created_at)
         .maybeSingle();
       
-      if (botResponseExists) continue;
+      if (botResponseExists) {
+        // Clear any typing indicators
+        await supabase
+          .from('typing_indicators')
+          .delete()
+          .eq('conversation_id', conv.id)
+          .eq('user_id', botId);
+        continue;
+      }
 
       // Check if bot is already typing
       const { data: existingTyping } = await supabase
