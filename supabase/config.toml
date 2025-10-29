@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.bot-responder]
 verify_jwt = false
+
+[functions.generate-bot-photo]
+verify_jwt = false
