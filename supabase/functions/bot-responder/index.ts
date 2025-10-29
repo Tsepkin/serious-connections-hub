@@ -91,6 +91,16 @@ serve(async (req) => {
 
       if (recentBotMessage) continue;
 
+      // Set typing indicator to true before generating response
+      await supabase
+        .from('typing_indicators')
+        .upsert({
+          conversation_id: conv.id,
+          user_id: botId,
+          is_typing: true,
+          updated_at: new Date().toISOString(),
+        });
+
       // Get conversation history
       const { data: messages } = await supabase
         .from('messages')
@@ -143,13 +153,27 @@ serve(async (req) => {
       const botMessage = aiData.choices?.[0]?.message?.content;
 
       if (botMessage) {
-        // Send bot message immediately
+        // Simulate typing delay based on message length (50-100ms per character, max 3 seconds)
+        const typingDelay = Math.min(botMessage.length * 70, 3000);
+        await new Promise(resolve => setTimeout(resolve, typingDelay));
+
+        // Send bot message
         const { error: msgError } = await supabase
           .from('messages')
           .insert({
             conversation_id: conv.id,
             sender_id: botId,
             content: botMessage
+          });
+
+        // Clear typing indicator after sending message
+        await supabase
+          .from('typing_indicators')
+          .upsert({
+            conversation_id: conv.id,
+            user_id: botId,
+            is_typing: false,
+            updated_at: new Date().toISOString(),
           });
 
         if (!msgError) {
