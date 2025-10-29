@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.update-bot-photos]
 verify_jwt = false
+
+[functions.cleanup-bots]
+verify_jwt = false
