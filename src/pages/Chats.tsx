@@ -64,8 +64,10 @@ const Chats = () => {
       setCurrentConversation(conv || null);
       fetchMessages(selectedChat);
       
+      console.log('Setting up realtime subscriptions for conversation:', selectedChat);
+      
       const channel = supabase
-        .channel(`messages:${selectedChat}`)
+        .channel(`conversation:${selectedChat}`)
         .on(
           'postgres_changes',
           {
@@ -75,6 +77,7 @@ const Chats = () => {
             filter: `conversation_id=eq.${selectedChat}`,
           },
           (payload) => {
+            console.log('New message received:', payload);
             setMessages((prev) => [...prev, payload.new as Message]);
           }
         )
@@ -87,6 +90,7 @@ const Chats = () => {
             filter: `id=eq.${selectedChat}`,
           },
           (payload) => {
+            console.log('Conversation updated:', payload);
             const updated = payload.new as any;
             setCurrentConversation(prev => prev ? { ...prev, ...updated } : null);
             setConversations(prev => prev.map(c => c.id === selectedChat ? { ...c, ...updated } : c));
@@ -101,6 +105,7 @@ const Chats = () => {
             filter: `conversation_id=eq.${selectedChat}`,
           },
           (payload) => {
+            console.log('Typing indicator event:', payload.eventType, payload);
             if (payload.eventType === 'DELETE') {
               const deletedData = payload.old as any;
               if (deletedData.user_id !== user!.id) {
@@ -114,9 +119,12 @@ const Chats = () => {
             }
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Realtime subscription status:', status);
+        });
 
       return () => {
+        console.log('Cleaning up realtime subscriptions');
         supabase.removeChannel(channel);
       };
     }
