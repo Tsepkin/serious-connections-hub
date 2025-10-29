@@ -101,9 +101,16 @@ const Chats = () => {
             filter: `conversation_id=eq.${selectedChat}`,
           },
           (payload) => {
-            const typingData = payload.new as any;
-            if (typingData.user_id !== user!.id) {
-              setIsOtherUserTyping(typingData.is_typing);
+            if (payload.eventType === 'DELETE') {
+              const deletedData = payload.old as any;
+              if (deletedData.user_id !== user!.id) {
+                setIsOtherUserTyping(false);
+              }
+            } else {
+              const typingData = payload.new as any;
+              if (typingData.user_id !== user!.id) {
+                setIsOtherUserTyping(typingData.is_typing);
+              }
             }
           }
         )
@@ -195,14 +202,22 @@ const Chats = () => {
     if (!selectedChat || !user) return;
 
     try {
-      await supabase
-        .from("typing_indicators")
-        .upsert({
-          conversation_id: selectedChat,
-          user_id: user.id,
-          is_typing: isTyping,
-          updated_at: new Date().toISOString(),
-        });
+      if (isTyping) {
+        await supabase
+          .from("typing_indicators")
+          .upsert({
+            conversation_id: selectedChat,
+            user_id: user.id,
+            is_typing: true,
+            updated_at: new Date().toISOString(),
+          });
+      } else {
+        await supabase
+          .from("typing_indicators")
+          .delete()
+          .eq("conversation_id", selectedChat)
+          .eq("user_id", user.id);
+      }
     } catch (error) {
       console.error('Error updating typing status:', error);
     }

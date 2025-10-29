@@ -179,12 +179,9 @@ serve(async (req) => {
         // Clear typing indicator after sending message
         await supabase
           .from('typing_indicators')
-          .upsert({
-            conversation_id: conv.id,
-            user_id: botId,
-            is_typing: false,
-            updated_at: new Date().toISOString(),
-          });
+          .delete()
+          .eq('conversation_id', conv.id)
+          .eq('user_id', botId);
 
         if (!msgError) {
           processedResponses.push({
