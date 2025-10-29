@@ -101,95 +101,99 @@ serve(async (req) => {
 
       if (existingTyping?.is_typing) continue; // Skip if bot is already typing
 
-      // Set typing indicator to true before generating response
-      await supabase
-        .from('typing_indicators')
-        .upsert({
-          conversation_id: conv.id,
-          user_id: botId,
-          is_typing: true,
-          updated_at: new Date().toISOString(),
-        });
-
-      // Get conversation history
-      const { data: messages } = await supabase
-        .from('messages')
-        .select('content, sender_id, created_at')
-        .eq('conversation_id', conv.id)
-        .order('created_at', { ascending: true });
-
-      // Generate AI response
-      const conversationHistory = messages?.map(m => ({
-        role: m.sender_id === botId ? 'assistant' : 'user',
-        content: m.content
-      })) || [];
-
-      // Prepare personality based on rank
-      let personality = '';
-      if (botRank === 1) {
-        personality = 'Будь очень дружелюбным, добрым и отзывчивым. Проявляй искренний интерес к собеседнику.';
-      } else if (botRank === 2) {
-        personality = 'Будь нейтральным и сдержанным в общении. Отвечай вежливо, но без излишнего энтузиазма.';
-      } else {
-        personality = 'Будь сухим и неохотным в общении. Отвечай кратко, без особого желания продолжать разговор.';
-      }
-
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${lovableApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            {
-              role: 'system',
-              content: `Ты ${botProfile.name}, пользователь сайта знакомств. О тебе: ${botProfile.about_me}. Твои ценности: ${botProfile.values}. ${personality} Отвечай естественно, как реальный человек. Пиши короткие сообщения (1-2 предложения). НЕ ИСПОЛЬЗУЙ эмодзи вообще. Задавай вопросы, чтобы поддержать разговор.`
-            },
-            ...conversationHistory
-          ],
-          temperature: 0.9,
-          max_tokens: 150
-        })
-      });
-
-      if (!aiResponse.ok) {
-        console.error('AI API error:', await aiResponse.text());
-        continue;
-      }
-
-      const aiData = await aiResponse.json();
-      const botMessage = aiData.choices?.[0]?.message?.content;
-
-      if (botMessage) {
-        // Simulate typing delay based on message length (min 1.5s, max 5s)
-        const typingDelay = Math.max(1500, Math.min(botMessage.length * 70, 5000));
-        await new Promise(resolve => setTimeout(resolve, typingDelay));
-
-        // Send bot message
-        const { error: msgError } = await supabase
-          .from('messages')
-          .insert({
+      try {
+        // Set typing indicator to true before generating response
+        await supabase
+          .from('typing_indicators')
+          .upsert({
             conversation_id: conv.id,
-            sender_id: botId,
-            content: botMessage
+            user_id: botId,
+            is_typing: true,
+            updated_at: new Date().toISOString(),
           });
 
-        // Clear typing indicator after sending message
+        // Get conversation history
+        const { data: messages } = await supabase
+          .from('messages')
+          .select('content, sender_id, created_at')
+          .eq('conversation_id', conv.id)
+          .order('created_at', { ascending: true });
+
+        // Generate AI response
+        const conversationHistory = messages?.map(m => ({
+          role: m.sender_id === botId ? 'assistant' : 'user',
+          content: m.content
+        })) || [];
+
+        // Prepare personality based on rank
+        let personality = '';
+        if (botRank === 1) {
+          personality = 'Будь очень дружелюбным, добрым и отзывчивым. Проявляй искренний интерес к собеседнику.';
+        } else if (botRank === 2) {
+          personality = 'Будь нейтральным и сдержанным в общении. Отвечай вежливо, но без излишнего энтузиазма.';
+        } else {
+          personality = 'Будь сухим и неохотным в общении. Отвечай кратко, без особого желания продолжать разговор.';
+        }
+
+        const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${lovableApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages: [
+              {
+                role: 'system',
+                content: `Ты ${botProfile.name}, пользователь сайта знакомств. О тебе: ${botProfile.about_me}. Твои ценности: ${botProfile.values}. ${personality} Отвечай естественно, как реальный человек. Пиши короткие сообщения (1-2 предложения). НЕ ИСПОЛЬЗУЙ эмодзи вообще. Задавай вопросы, чтобы поддержать разговор.`
+              },
+              ...conversationHistory
+            ],
+            temperature: 0.9,
+            max_tokens: 150
+          })
+        });
+
+        if (!aiResponse.ok) {
+          console.error('AI API error:', await aiResponse.text());
+          throw new Error('AI API request failed');
+        }
+
+        const aiData = await aiResponse.json();
+        const botMessage = aiData.choices?.[0]?.message?.content;
+
+        if (botMessage) {
+          // Simulate typing delay based on message length (min 1.5s, max 5s)
+          const typingDelay = Math.max(1500, Math.min(botMessage.length * 70, 5000));
+          await new Promise(resolve => setTimeout(resolve, typingDelay));
+
+          // Send bot message
+          const { error: msgError } = await supabase
+            .from('messages')
+            .insert({
+              conversation_id: conv.id,
+              sender_id: botId,
+              content: botMessage
+            });
+
+          if (!msgError) {
+            processedResponses.push({
+              conversation_id: conv.id,
+              bot_name: botProfile.name,
+              message: botMessage
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error processing bot response:', error);
+      } finally {
+        // Always clear typing indicator, even if there was an error
         await supabase
           .from('typing_indicators')
           .delete()
           .eq('conversation_id', conv.id)
           .eq('user_id', botId);
-
-        if (!msgError) {
-          processedResponses.push({
-            conversation_id: conv.id,
-            bot_name: botProfile.name,
-            message: botMessage
-          });
-        }
       }
     }
 
