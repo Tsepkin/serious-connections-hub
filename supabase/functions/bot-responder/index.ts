@@ -76,20 +76,25 @@ serve(async (req) => {
         if (recentBotMessage) continue; // Skip if bot already responded recently
       }
 
-      // Get last message
-      const lastMessage = conv.messages?.[0];
-      if (!lastMessage || lastMessage.sender_id === botId) continue;
-
-      // Check if there's already a recent bot response (within last 10 seconds)
-      const { data: recentBotMessage } = await supabase
+      // Get last 2 messages to check conversation flow
+      const lastMessages = conv.messages?.slice(0, 2) || [];
+      const lastMessage = lastMessages[0];
+      
+      if (!lastMessage) continue;
+      
+      // Skip if last message is from bot
+      if (lastMessage.sender_id === botId) continue;
+      
+      // Skip if bot already responded to this message (check if there's a bot message after the last user message)
+      const { data: botResponseExists } = await supabase
         .from('messages')
-        .select('created_at')
+        .select('id')
         .eq('conversation_id', conv.id)
         .eq('sender_id', botId)
-        .gte('created_at', new Date(Date.now() - 10000).toISOString())
+        .gt('created_at', lastMessage.created_at)
         .maybeSingle();
-
-      if (recentBotMessage) continue;
+      
+      if (botResponseExists) continue;
 
       // Check if bot is already typing
       const { data: existingTyping } = await supabase
