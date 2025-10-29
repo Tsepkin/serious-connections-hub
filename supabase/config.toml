@@ -1,4 +1,7 @@
 project_id = "lqmzujeljkgapnpggpuv"
 
+[functions.create-bots]
+verify_jwt = false
+
 [functions.bot-responder]
 verify_jwt = false

@@ -1,162 +1,207 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
+    if (!lovableApiKey) {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    // Get all unprocessed bot responses from queue
-    const { data: queueItems, error: queueError } = await supabaseClient
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+
+    // Get all unprocessed messages from real users to bots
+    const { data: conversations, error: convError } = await supabase
+      .from('conversations')
+      .select(`
+        id,
+        user1_id,
+        user2_id,
+        messages(id, content, sender_id, created_at)
+      `)
+      .order('created_at', { foreignTable: 'messages', ascending: false });
+
+    if (convError) throw convError;
+
+    const responsesScheduled = [];
+
+    for (const conv of conversations || []) {
+      // Determine which user is bot
+      const { data: user1 } = await supabase
+        .from('profiles')
+        .select('is_bot')
+        .eq('id', conv.user1_id)
+        .single();
+      
+      const { data: user2 } = await supabase
+        .from('profiles')
+        .select('is_bot')
+        .eq('id', conv.user2_id)
+        .single();
+
+      const botId = user1?.is_bot ? conv.user1_id : (user2?.is_bot ? conv.user2_id : null);
+
+      if (!botId) continue;
+
+      // Get last message
+      const lastMessage = conv.messages?.[0];
+      if (!lastMessage || lastMessage.sender_id === botId) continue;
+
+      // Check if bot already has a queued response
+      const { data: existingQueue } = await supabase
+        .from('bot_response_queue')
+        .select('id')
+        .eq('conversation_id', conv.id)
+        .eq('message_id', lastMessage.id)
+        .maybeSingle();
+
+      if (existingQueue) continue;
+
+      // Schedule random delay (20 seconds to 30 minutes)
+      const delayMs = Math.floor(Math.random() * (30 * 60 * 1000 - 20 * 1000)) + 20 * 1000;
+      const scheduledAt = new Date(Date.now() + delayMs);
+
+      // Queue response
+      const { error: queueError } = await supabase
+        .from('bot_response_queue')
+        .insert({
+          conversation_id: conv.id,
+          bot_id: botId,
+          message_id: lastMessage.id,
+          scheduled_at: scheduledAt.toISOString(),
+          processed: false
+        });
+
+      if (!queueError) {
+        responsesScheduled.push({ 
+          conversation_id: conv.id, 
+          scheduled_at: scheduledAt,
+          delay_seconds: Math.floor(delayMs / 1000)
+        });
+      }
+    }
+
+    // Process due responses
+    const { data: dueResponses, error: dueError } = await supabase
       .from('bot_response_queue')
-      .select('*, bot_profiles(*), messages(*), conversations(*)')
+      .select('*')
       .eq('processed', false)
       .lte('scheduled_at', new Date().toISOString());
 
-    if (queueError) throw queueError;
+    if (dueError) throw dueError;
 
-    console.log(`Processing ${queueItems?.length || 0} queued bot responses`);
+    const processedResponses = [];
 
-    for (const item of queueItems || []) {
-      try {
-        // Get conversation history
-        const { data: messages } = await supabaseClient
-          .from('messages')
-          .select('content, sender_id')
-          .eq('conversation_id', item.conversation_id)
-          .order('created_at', { ascending: true });
+    for (const response of dueResponses || []) {
+      // Get conversation history
+      const { data: messages } = await supabase
+        .from('messages')
+        .select('content, sender_id, created_at')
+        .eq('conversation_id', response.conversation_id)
+        .order('created_at', { ascending: true });
 
-        // Build conversation context
-        const conversationHistory = messages?.map(m => ({
-          role: m.sender_id === item.bot_id ? 'assistant' : 'user',
-          content: m.content
-        })) || [];
+      // Get bot profile for context
+      const { data: botProfile } = await supabase
+        .from('profiles')
+        .select('name, about_me, values')
+        .eq('id', response.bot_id)
+        .single();
 
-        // Generate AI response
-        const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
-            messages: [
-              {
-                role: 'system',
-                content: `Ты ${item.bot_profiles.name}, ${item.bot_profiles.age} лет, из города ${item.bot_profiles.city}. ${item.bot_profiles.about_me}. Твои ценности: ${item.bot_profiles.values}. Общайся естественно, по-дружески, как реальный человек на сайте знакомств. Отвечай кратко (1-3 предложения), иногда задавай встречные вопросы. Используй эмоции и разговорный стиль.`
-              },
-              ...conversationHistory
-            ],
-          }),
-        });
+      // Generate AI response
+      const conversationHistory = messages?.map(m => ({
+        role: m.sender_id === response.bot_id ? 'assistant' : 'user',
+        content: m.content
+      })) || [];
 
-        if (!aiResponse.ok) {
-          console.error('AI API error:', await aiResponse.text());
-          continue;
-        }
+      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${lovableApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            {
+              role: 'system',
+              content: `Ты ${botProfile?.name}, пользователь сайта знакомств. О тебе: ${botProfile?.about_me}. Твои ценности: ${botProfile?.values}. Отвечай естественно, как реальный человек. Будь дружелюбным и заинтересованным. Пиши короткие сообщения (1-3 предложения). Задавай вопросы, чтобы поддержать разговор. Используй эмодзи изредка.`
+            },
+            ...conversationHistory
+          ],
+          temperature: 0.9,
+          max_tokens: 150
+        })
+      });
 
-        const aiData = await aiResponse.json();
-        const botMessage = aiData.choices?.[0]?.message?.content;
-
-        if (botMessage) {
-          // Insert bot response
-          const { error: insertError } = await supabaseClient
-            .from('messages')
-            .insert({
-              conversation_id: item.conversation_id,
-              sender_id: item.bot_id,
-              content: botMessage
-            });
-
-          if (insertError) {
-            console.error('Error inserting bot message:', insertError);
-            continue;
-          }
-        }
-
-        // Mark as processed
-        await supabaseClient
-          .from('bot_response_queue')
-          .update({ processed: true })
-          .eq('id', item.id);
-
-        console.log(`Bot ${item.bot_profiles.name} responded to conversation ${item.conversation_id}`);
-      } catch (err) {
-        console.error(`Error processing queue item ${item.id}:`, err);
+      if (!aiResponse.ok) {
+        console.error('AI API error:', await aiResponse.text());
+        continue;
       }
-    }
 
-    // Check for new messages to bots that need responses
-    const { data: recentMessages } = await supabaseClient
-      .from('messages')
-      .select('*, conversations!inner(user1_id, user2_id)')
-      .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
-      .order('created_at', { ascending: false });
+      const aiData = await aiResponse.json();
+      const botMessage = aiData.choices?.[0]?.message?.content;
 
-    for (const message of recentMessages || []) {
-      const conv = message.conversations;
-      const botId = message.sender_id === conv.user1_id ? conv.user2_id : conv.user1_id;
+      if (botMessage) {
+        // Send bot message
+        const { error: msgError } = await supabase
+          .from('messages')
+          .insert({
+            conversation_id: response.conversation_id,
+            sender_id: response.bot_id,
+            content: botMessage
+          });
 
-      // Check if recipient is a bot
-      const { data: botProfile } = await supabaseClient
-        .from('bot_profiles')
-        .select('id')
-        .eq('id', botId)
-        .maybeSingle();
-
-      if (botProfile) {
-        // Check if response already queued
-        const { data: existing } = await supabaseClient
-          .from('bot_response_queue')
-          .select('id')
-          .eq('message_id', message.id)
-          .eq('bot_id', botId)
-          .maybeSingle();
-
-        if (!existing) {
-          // Schedule random delay between 20s and 30 minutes
-          const delaySeconds = Math.floor(Math.random() * (30 * 60 - 20) + 20);
-          const scheduledAt = new Date(Date.now() + delaySeconds * 1000);
-
-          await supabaseClient
+        if (!msgError) {
+          // Mark as processed
+          await supabase
             .from('bot_response_queue')
-            .insert({
-              conversation_id: message.conversation_id,
-              bot_id: botId,
-              message_id: message.id,
-              scheduled_at: scheduledAt.toISOString()
-            });
+            .update({ processed: true })
+            .eq('id', response.id);
 
-          console.log(`Scheduled bot response in ${delaySeconds}s for conversation ${message.conversation_id}`);
+          processedResponses.push({
+            conversation_id: response.conversation_id,
+            message: botMessage
+          });
         }
       }
     }
 
     return new Response(
-      JSON.stringify({ success: true, processed: queueItems?.length || 0 }),
+      JSON.stringify({ 
+        success: true,
+        responses_scheduled: responsesScheduled.length,
+        responses_sent: processedResponses.length,
+        scheduled: responsesScheduled,
+        sent: processedResponses
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+
   } catch (error) {
-    console.error('Bot responder error:', error);
+    console.error('Error in bot-responder function:', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
     );
   }
 });
