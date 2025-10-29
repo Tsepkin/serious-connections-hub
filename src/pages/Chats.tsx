@@ -189,6 +189,14 @@ const Chats = () => {
       if (error) throw error;
 
       setNewMessage("");
+
+      // Trigger bot response immediately
+      try {
+        await supabase.functions.invoke('bot-responder');
+      } catch (botError) {
+        console.error('Error triggering bot response:', botError);
+        // Don't show error to user, just log it
+      }
     } catch (error: any) {
       toast({
         title: "Ошибка",

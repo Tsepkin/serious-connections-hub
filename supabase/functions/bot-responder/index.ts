@@ -27,7 +27,7 @@ serve(async (req) => {
       }
     });
 
-    // Get all unprocessed messages from real users to bots
+    // Get all conversations with unresponded messages from real users to bots
     const { data: conversations, error: convError } = await supabase
       .from('conversations')
       .select(`
@@ -40,93 +40,52 @@ serve(async (req) => {
 
     if (convError) throw convError;
 
-    const responsesScheduled = [];
+    const processedResponses = [];
 
     for (const conv of conversations || []) {
       // Determine which user is bot
       const { data: user1 } = await supabase
         .from('profiles')
-        .select('is_bot')
+        .select('is_bot, name, about_me, values')
         .eq('id', conv.user1_id)
-        .single();
+        .maybeSingle();
       
       const { data: user2 } = await supabase
         .from('profiles')
-        .select('is_bot')
+        .select('is_bot, name, about_me, values')
         .eq('id', conv.user2_id)
-        .single();
+        .maybeSingle();
 
+      const botProfile = user1?.is_bot ? user1 : (user2?.is_bot ? user2 : null);
       const botId = user1?.is_bot ? conv.user1_id : (user2?.is_bot ? conv.user2_id : null);
 
-      if (!botId) continue;
+      if (!botId || !botProfile) continue;
 
       // Get last message
       const lastMessage = conv.messages?.[0];
       if (!lastMessage || lastMessage.sender_id === botId) continue;
 
-      // Check if bot already has a queued response
-      const { data: existingQueue } = await supabase
-        .from('bot_response_queue')
-        .select('id')
+      // Check if there's already a recent bot response (within last 10 seconds)
+      const { data: recentBotMessage } = await supabase
+        .from('messages')
+        .select('created_at')
         .eq('conversation_id', conv.id)
-        .eq('message_id', lastMessage.id)
+        .eq('sender_id', botId)
+        .gte('created_at', new Date(Date.now() - 10000).toISOString())
         .maybeSingle();
 
-      if (existingQueue) continue;
+      if (recentBotMessage) continue;
 
-      // Schedule random delay (20 seconds to 30 minutes)
-      const delayMs = Math.floor(Math.random() * (30 * 60 * 1000 - 20 * 1000)) + 20 * 1000;
-      const scheduledAt = new Date(Date.now() + delayMs);
-
-      // Queue response
-      const { error: queueError } = await supabase
-        .from('bot_response_queue')
-        .insert({
-          conversation_id: conv.id,
-          bot_id: botId,
-          message_id: lastMessage.id,
-          scheduled_at: scheduledAt.toISOString(),
-          processed: false
-        });
-
-      if (!queueError) {
-        responsesScheduled.push({ 
-          conversation_id: conv.id, 
-          scheduled_at: scheduledAt,
-          delay_seconds: Math.floor(delayMs / 1000)
-        });
-      }
-    }
-
-    // Process due responses
-    const { data: dueResponses, error: dueError } = await supabase
-      .from('bot_response_queue')
-      .select('*')
-      .eq('processed', false)
-      .lte('scheduled_at', new Date().toISOString());
-
-    if (dueError) throw dueError;
-
-    const processedResponses = [];
-
-    for (const response of dueResponses || []) {
       // Get conversation history
       const { data: messages } = await supabase
         .from('messages')
         .select('content, sender_id, created_at')
-        .eq('conversation_id', response.conversation_id)
+        .eq('conversation_id', conv.id)
         .order('created_at', { ascending: true });
-
-      // Get bot profile for context
-      const { data: botProfile } = await supabase
-        .from('profiles')
-        .select('name, about_me, values')
-        .eq('id', response.bot_id)
-        .single();
 
       // Generate AI response
       const conversationHistory = messages?.map(m => ({
-        role: m.sender_id === response.bot_id ? 'assistant' : 'user',
+        role: m.sender_id === botId ? 'assistant' : 'user',
         content: m.content
       })) || [];
 
@@ -141,7 +100,7 @@ serve(async (req) => {
           messages: [
             {
               role: 'system',
-              content: `Ты ${botProfile?.name}, пользователь сайта знакомств. О тебе: ${botProfile?.about_me}. Твои ценности: ${botProfile?.values}. Отвечай естественно, как реальный человек. Будь дружелюбным и заинтересованным. Пиши короткие сообщения (1-3 предложения). Задавай вопросы, чтобы поддержать разговор. Используй эмодзи изредка.`
+              content: `Ты ${botProfile.name}, пользователь сайта знакомств. О тебе: ${botProfile.about_me}. Твои ценности: ${botProfile.values}. Отвечай естественно, как реальный человек. Будь дружелюбным и заинтересованным. Пиши короткие сообщения (1-3 предложения). Задавай вопросы, чтобы поддержать разговор. Используй эмодзи изредка.`
             },
             ...conversationHistory
           ],
@@ -159,24 +118,19 @@ serve(async (req) => {
       const botMessage = aiData.choices?.[0]?.message?.content;
 
       if (botMessage) {
-        // Send bot message
+        // Send bot message immediately
         const { error: msgError } = await supabase
           .from('messages')
           .insert({
-            conversation_id: response.conversation_id,
-            sender_id: response.bot_id,
+            conversation_id: conv.id,
+            sender_id: botId,
             content: botMessage
           });
 
         if (!msgError) {
-          // Mark as processed
-          await supabase
-            .from('bot_response_queue')
-            .update({ processed: true })
-            .eq('id', response.id);
-
           processedResponses.push({
-            conversation_id: response.conversation_id,
+            conversation_id: conv.id,
+            bot_name: botProfile.name,
             message: botMessage
           });
         }
@@ -186,9 +140,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true,
-        responses_scheduled: responsesScheduled.length,
         responses_sent: processedResponses.length,
-        scheduled: responsesScheduled,
         sent: processedResponses
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
