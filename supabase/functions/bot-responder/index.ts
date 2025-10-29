@@ -43,6 +43,8 @@ serve(async (req) => {
     const processedResponses = [];
 
     for (const conv of conversations || []) {
+      console.log(`Processing conversation ${conv.id}`);
+      
       // Determine which user is bot
       const { data: user1 } = await supabase
         .from('profiles')
@@ -59,7 +61,12 @@ serve(async (req) => {
       const botProfile = user1?.is_bot ? user1 : (user2?.is_bot ? user2 : null);
       const botId = user1?.is_bot ? conv.user1_id : (user2?.is_bot ? conv.user2_id : null);
 
-      if (!botId || !botProfile) continue;
+      if (!botId || !botProfile) {
+        console.log(`Skipping conversation ${conv.id}: no bot found`);
+        continue;
+      }
+
+      console.log(`Bot ${botProfile.name} (${botId}) in conversation ${conv.id}`);
 
       // Check bot rank and apply delay
       const botRank = botProfile.rank || 1;
@@ -73,17 +80,26 @@ serve(async (req) => {
           .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
           .maybeSingle();
 
-        if (recentBotMessage) continue; // Skip if bot already responded recently
+        if (recentBotMessage) {
+          console.log(`Skipping: Rank 3 bot already responded recently`);
+          continue;
+        }
       }
 
       // Get last 2 messages to check conversation flow
       const lastMessages = conv.messages?.slice(0, 2) || [];
       const lastMessage = lastMessages[0];
       
-      if (!lastMessage) continue;
+      if (!lastMessage) {
+        console.log(`Skipping conversation ${conv.id}: no messages`);
+        continue;
+      }
+      
+      console.log(`Last message in ${conv.id}: from ${lastMessage.sender_id}, at ${lastMessage.created_at}`);
       
       // CRITICAL: Skip if last message is from bot - bot should not respond to itself
       if (lastMessage.sender_id === botId) {
+        console.log(`Skipping: last message is from bot`);
         // Make sure typing indicator is cleared if it exists
         await supabase
           .from('typing_indicators')
@@ -96,13 +112,14 @@ serve(async (req) => {
       // Skip if bot already responded to this message (check if there's a bot message after the last user message)
       const { data: botResponseExists } = await supabase
         .from('messages')
-        .select('id')
+        .select('id, created_at')
         .eq('conversation_id', conv.id)
         .eq('sender_id', botId)
         .gt('created_at', lastMessage.created_at)
         .maybeSingle();
       
       if (botResponseExists) {
+        console.log(`Skipping: bot already responded at ${botResponseExists.created_at}`);
         // Clear any typing indicators
         await supabase
           .from('typing_indicators')
@@ -115,12 +132,17 @@ serve(async (req) => {
       // Check if bot is already typing
       const { data: existingTyping } = await supabase
         .from('typing_indicators')
-        .select('is_typing')
+        .select('is_typing, updated_at')
         .eq('conversation_id', conv.id)
         .eq('user_id', botId)
         .maybeSingle();
 
-      if (existingTyping?.is_typing) continue; // Skip if bot is already typing
+      if (existingTyping?.is_typing) {
+        console.log(`Skipping: bot is already typing (since ${existingTyping.updated_at})`);
+        continue;
+      }
+
+      console.log(`Bot will respond to message: "${lastMessage.content}"`);
 
       try {
         // Set typing indicator to true before generating response
