@@ -415,26 +415,9 @@ const Chats = () => {
             </div>
 
             <div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border p-4 space-y-2">
-              <div className="max-w-2xl mx-auto">
-                {currentConversation && !currentConversation.meeting_confirmed && (
-                  <Button
-                    onClick={requestMeeting}
-                    variant="outline"
-                    className="w-full mb-2"
-                    disabled={
-                      (currentConversation.user1_id === user!.id && currentConversation.meeting_requested_by_user1) ||
-                      (currentConversation.user2_id === user!.id && currentConversation.meeting_requested_by_user2)
-                    }
-                  >
-                    <Calendar className="mr-2" size={20} />
-                    {((currentConversation.user1_id === user!.id && currentConversation.meeting_requested_by_user1) ||
-                      (currentConversation.user2_id === user!.id && currentConversation.meeting_requested_by_user2))
-                      ? "Ожидаем подтверждения..."
-                      : "Давай встретимся"}
-                  </Button>
-                )}
+              <div className="max-w-2xl mx-auto space-y-2">
                 {currentConversation?.meeting_confirmed && (
-                  <div className="bg-success/10 border border-success rounded-lg p-3 mb-2 text-center">
+                  <div className="bg-success/10 border border-success rounded-lg p-3 text-center">
                     <p className="text-sm font-semibold text-success">
                       ✓ Встреча подтверждена! Теперь можете оценить встречу на странице Анкеты
                     </p>
@@ -451,6 +434,97 @@ const Chats = () => {
                     <Send size={20} />
                   </Button>
                 </div>
+                {currentConversation && !currentConversation.meeting_confirmed && (
+                  <>
+                    {(() => {
+                      const isUser1 = currentConversation.user1_id === user!.id;
+                      const iRequestedMeeting = isUser1 ? currentConversation.meeting_requested_by_user1 : currentConversation.meeting_requested_by_user2;
+                      const otherUserRequestedMeeting = isUser1 ? currentConversation.meeting_requested_by_user2 : currentConversation.meeting_requested_by_user1;
+
+                      if (otherUserRequestedMeeting && !iRequestedMeeting) {
+                        return (
+                          <div className="space-y-2">
+                            <p className="text-sm text-center text-muted-foreground">
+                              {currentConversation.other_user.name} предложил(а) встретиться
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button
+                                onClick={requestMeeting}
+                                variant="default"
+                                className="w-full"
+                              >
+                                <Calendar className="mr-2" size={16} />
+                                Встретиться
+                              </Button>
+                              <Button
+                                onClick={async () => {
+                                  try {
+                                    const updateField = isUser1 ? "meeting_requested_by_user2" : "meeting_requested_by_user1";
+                                    await supabase
+                                      .from("conversations")
+                                      .update({ [updateField]: false })
+                                      .eq("id", currentConversation.id);
+                                    
+                                    await supabase
+                                      .from("messages")
+                                      .insert({
+                                        conversation_id: currentConversation.id,
+                                        sender_id: user!.id,
+                                        content: "❌ Отклонил(а) встречу",
+                                      });
+
+                                    toast({
+                                      title: "Встреча отклонена",
+                                      description: "Вы отклонили приглашение на встречу",
+                                    });
+                                  } catch (error: any) {
+                                    toast({
+                                      title: "Ошибка",
+                                      description: error.message,
+                                      variant: "destructive",
+                                    });
+                                  }
+                                }}
+                                variant="outline"
+                                className="w-full"
+                              >
+                                Не встретиться
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (iRequestedMeeting && !otherUserRequestedMeeting) {
+                        return (
+                          <Button
+                            variant="outline"
+                            className="w-full"
+                            disabled
+                          >
+                            <Calendar className="mr-2" size={20} />
+                            Ожидаем подтверждения...
+                          </Button>
+                        );
+                      }
+
+                      if (!iRequestedMeeting && !otherUserRequestedMeeting) {
+                        return (
+                          <Button
+                            onClick={requestMeeting}
+                            variant="outline"
+                            className="w-full"
+                          >
+                            <Calendar className="mr-2" size={20} />
+                            Давай встретимся
+                          </Button>
+                        );
+                      }
+
+                      return null;
+                    })()}
+                  </>
+                )}
               </div>
             </div>
           </div>
