@@ -65,27 +65,6 @@ const Profiles = () => {
     try {
       console.log("Fetching profiles...");
       
-      // Check if bots exist, if not create them
-      const { data: botCheck } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("is_bot", true)
-        .limit(1)
-        .maybeSingle();
-
-      if (!botCheck) {
-        console.log("Creating bots...");
-        toast({
-          title: "Загрузка",
-          description: "Создаём профили для вас...",
-        });
-        
-        await supabase.functions.invoke('create-bots');
-        
-        // Wait a bit for bots to be created
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-      
       // Get user's profile to filter by looking_for
       const { data: myProfile } = await supabase
         .from("profiles")
