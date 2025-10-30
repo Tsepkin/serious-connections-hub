@@ -196,7 +196,22 @@ const CreateProfile = () => {
                   min="18"
                   max="100"
                   value={formData.age}
-                  onChange={(e) => setFormData({ ...formData, age: parseInt(e.target.value) || 18 })}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      setFormData({ ...formData, age: '' as any });
+                    } else {
+                      const numValue = parseInt(value);
+                      if (!isNaN(numValue)) {
+                        setFormData({ ...formData, age: numValue });
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (e.target.value === '' || parseInt(e.target.value) < 18) {
+                      setFormData({ ...formData, age: 18 });
+                    }
+                  }}
                   required
                 />
               </div>

@@ -15,45 +15,63 @@ export const PhotoUpload = ({ photos, onPhotosChange, userId }: PhotoUploadProps
   const { toast } = useToast();
 
   const uploadPhoto = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
+    // Support HEIC and other image formats from iPhone
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    const isValidImage = validTypes.includes(file.type.toLowerCase()) || file.type.startsWith('image/');
+    
+    if (!isValidImage) {
       toast({
         title: "Ошибка",
-        description: "Пожалуйста, загрузите изображение",
+        description: "Пожалуйста, загрузите изображение (JPG, PNG, WEBP, HEIC)",
         variant: "destructive",
       });
       return null;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > 10 * 1024 * 1024) {
       toast({
         title: "Ошибка",
-        description: "Размер файла не должен превышать 5 МБ",
+        description: "Размер файла не должен превышать 10 МБ",
         variant: "destructive",
       });
       return null;
     }
 
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}/${Math.random()}.${fileExt}`;
+    try {
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-    const { error: uploadError, data } = await supabase.storage
-      .from('profile-photos')
-      .upload(fileName, file);
+      const { error: uploadError, data } = await supabase.storage
+        .from('profile-photos')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
-    if (uploadError) {
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        toast({
+          title: "Ошибка загрузки",
+          description: `Не удалось загрузить фото: ${uploadError.message}`,
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(fileName);
+
+      return publicUrl;
+    } catch (error: any) {
+      console.error('Upload exception:', error);
       toast({
-        title: "Ошибка загрузки",
-        description: uploadError.message,
+        title: "Ошибка",
+        description: "Произошла ошибка при загрузке фото. Попробуйте еще раз.",
         variant: "destructive",
       });
       return null;
     }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('profile-photos')
-      .getPublicUrl(fileName);
-
-    return publicUrl;
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,7 +147,8 @@ export const PhotoUpload = ({ photos, onPhotosChange, userId }: PhotoUploadProps
               <label className="flex items-center justify-center h-full cursor-pointer hover:bg-muted/80 transition-colors">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,image/heic,image/heif"
+                  capture="environment"
                   className="hidden"
                   onChange={handleFileSelect}
                   disabled={uploading || photos.length >= 9}
