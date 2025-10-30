@@ -75,7 +75,12 @@ export const PhotoUpload = ({ photos, onPhotosChange, userId }: PhotoUploadProps
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
+    console.log('File select triggered');
+    
+    if (!e.target.files || e.target.files.length === 0) {
+      console.log('No files selected');
+      return;
+    }
     
     if (photos.length >= 9) {
       toast({
@@ -86,20 +91,39 @@ export const PhotoUpload = ({ photos, onPhotosChange, userId }: PhotoUploadProps
       return;
     }
 
-    setUploading(true);
     const file = e.target.files[0];
-    const url = await uploadPhoto(file);
+    console.log('File selected:', {
+      name: file.name,
+      type: file.type,
+      size: file.size
+    });
+
+    setUploading(true);
     
-    if (url) {
-      onPhotosChange([...photos, url]);
+    try {
+      const url = await uploadPhoto(file);
+      
+      if (url) {
+        console.log('Upload successful:', url);
+        onPhotosChange([...photos, url]);
+        toast({
+          title: "Успешно",
+          description: "Фотография загружена",
+        });
+      } else {
+        console.log('Upload failed: no URL returned');
+      }
+    } catch (error) {
+      console.error('Upload error in handler:', error);
       toast({
-        title: "Успешно",
-        description: "Фотография загружена",
+        title: "Ошибка",
+        description: "Не удалось загрузить фотографию",
+        variant: "destructive",
       });
+    } finally {
+      setUploading(false);
+      e.target.value = '';
     }
-    
-    setUploading(false);
-    e.target.value = '';
   };
 
   const removePhoto = async (index: number) => {
