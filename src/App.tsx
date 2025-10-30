@@ -11,7 +11,7 @@ import CreateProfile from "./pages/CreateProfile";
 import Profiles from "./pages/Profiles";
 import Chats from "./pages/Chats";
 import Profile from "./pages/Profile";
-import AdminBots from "./pages/AdminBots";
+
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,7 +31,7 @@ const App = () => (
           <Route path="/profiles" element={<Profiles />} />
           <Route path="/chats" element={<Chats />} />
           <Route path="/profile" element={<Profile />} />
-          <Route path="/admin/bots" element={<AdminBots />} />
+          
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
