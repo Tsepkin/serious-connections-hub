@@ -31,23 +31,27 @@ serve(async (req) => {
     let deletedCount = 0;
     let failedCount = 0;
 
-    // Delete each bot user
-    for (const user of botUsers) {
+    // Delete ALL bot users in batches
+    const deletePromises = botUsers.map(async (user) => {
       try {
         const { error: deleteError } = await supabaseClient.auth.admin.deleteUser(user.id);
         
         if (deleteError) {
           console.error(`Failed to delete user ${user.email}:`, deleteError);
-          failedCount++;
+          return { success: false, email: user.email };
         } else {
           console.log(`Deleted user: ${user.email}`);
-          deletedCount++;
+          return { success: true, email: user.email };
         }
       } catch (error) {
         console.error(`Error deleting user ${user.email}:`, error);
-        failedCount++;
+        return { success: false, email: user.email };
       }
-    }
+    });
+
+    const results = await Promise.all(deletePromises);
+    deletedCount = results.filter(r => r.success).length;
+    failedCount = results.filter(r => !r.success).length;
 
     return new Response(
       JSON.stringify({ 
