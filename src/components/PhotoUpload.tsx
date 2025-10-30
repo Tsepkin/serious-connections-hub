@@ -148,7 +148,6 @@ export const PhotoUpload = ({ photos, onPhotosChange, userId }: PhotoUploadProps
                 <input
                   type="file"
                   accept="image/*,image/heic,image/heif"
-                  capture="environment"
                   className="hidden"
                   onChange={handleFileSelect}
                   disabled={uploading || photos.length >= 9}
