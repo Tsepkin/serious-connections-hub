@@ -19,6 +19,8 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -65,9 +67,51 @@ const Auth = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast({
+        title: "Ошибка",
+        description: "Введите email для восстановления пароля",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth`,
+    });
+
+    if (error) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Письмо отправлено",
+        description: "Проверьте почту для восстановления пароля",
+      });
+      setShowForgotPassword(false);
+    }
+    setLoading(false);
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    // Check password confirmation for signup
+    if (!isLogin && password !== confirmPassword) {
+      toast({
+        title: "Ошибка",
+        description: "Пароли не совпадают",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
 
     const passwordValidation = passwordSchema.safeParse(password);
     if (!passwordValidation.success) {
@@ -216,7 +260,16 @@ const Auth = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="login-password">Пароль</Label>
+                      <div className="flex justify-between items-center">
+                        <Label htmlFor="login-password">Пароль</Label>
+                        <button
+                          type="button"
+                          onClick={() => setShowForgotPassword(true)}
+                          className="text-sm text-primary hover:underline"
+                        >
+                          Забыли пароль?
+                        </button>
+                      </div>
                       <Input
                         id="login-password"
                         type="password"
@@ -299,6 +352,18 @@ const Auth = () => {
                         disabled={loading}
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-confirm-password">Подтвердите пароль</Label>
+                      <Input
+                        id="signup-confirm-password"
+                        type="password"
+                        placeholder="Повторите пароль"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        disabled={loading}
+                      />
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="phone" className="mt-0 space-y-4">
@@ -329,6 +394,18 @@ const Auth = () => {
                         disabled={loading}
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-phone-confirm-password">Подтвердите пароль</Label>
+                      <Input
+                        id="signup-phone-confirm-password"
+                        type="password"
+                        placeholder="Повторите пароль"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        disabled={loading}
+                      />
+                    </div>
                   </TabsContent>
 
                   <Button type="submit" className="w-full" disabled={loading}>
@@ -340,6 +417,50 @@ const Auth = () => {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Forgot Password Dialog */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Восстановление пароля</CardTitle>
+              <CardDescription>
+                Введите email для получения ссылки восстановления
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Email</Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  placeholder="example@mail.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setShowForgotPassword(false)}
+                  variant="outline"
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  Отмена
+                </Button>
+                <Button
+                  onClick={handleForgotPassword}
+                  className="flex-1"
+                  disabled={loading}
+                >
+                  {loading ? "Отправка..." : "Отправить"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

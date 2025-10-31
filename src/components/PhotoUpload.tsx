@@ -127,6 +127,9 @@ export const PhotoUpload = ({ photos, onPhotosChange, userId }: PhotoUploadProps
   };
 
   const removePhoto = async (index: number) => {
+    // Save current scroll position
+    const scrollPosition = window.scrollY;
+    
     const photoUrl = photos[index];
     const fileName = photoUrl.split('/profile-photos/')[1];
     
@@ -143,6 +146,11 @@ export const PhotoUpload = ({ photos, onPhotosChange, userId }: PhotoUploadProps
       title: "Успешно",
       description: "Фотография удалена",
     });
+    
+    // Restore scroll position after state update
+    setTimeout(() => {
+      window.scrollTo(0, scrollPosition);
+    }, 0);
   };
 
   return (

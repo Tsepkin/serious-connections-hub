@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Heart, X, Calendar, MapPin, Shield, Star } from "lucide-react";
+import { Heart, X, Calendar, MapPin, Shield, Star, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Review {
   author: string;
@@ -14,6 +15,7 @@ interface Profile {
   age: number;
   city: string;
   photo: string;
+  photos?: string[];
   honestyRating: number;
   about: string;
   goals: string;
@@ -28,15 +30,56 @@ interface ProfileCardProps {
 }
 
 const ProfileCard = ({ profile, onLike, onDislike, onMeetingRequest }: ProfileCardProps) => {
+  const photos = profile.photos && profile.photos.length > 0 ? profile.photos : [profile.photo];
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+
+  const nextPhoto = () => {
+    setCurrentPhotoIndex((prev) => (prev + 1) % photos.length);
+  };
+
+  const prevPhoto = () => {
+    setCurrentPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length);
+  };
+
   return (
     <div className="bg-card rounded-3xl shadow-card overflow-hidden max-w-md w-full animate-fade-in">
-      {/* Photo */}
+      {/* Photo Carousel */}
       <div className="relative aspect-[3/4] bg-muted">
         <img 
-          src={profile.photo} 
+          src={photos[currentPhotoIndex]} 
           alt={profile.name}
           className="w-full h-full object-cover"
         />
+        
+        {/* Photo Navigation */}
+        {photos.length > 1 && (
+          <>
+            <button
+              onClick={prevPhoto}
+              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-2 hover:bg-black/70 transition-colors"
+            >
+              <ChevronLeft size={24} />
+            </button>
+            <button
+              onClick={nextPhoto}
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white rounded-full p-2 hover:bg-black/70 transition-colors"
+            >
+              <ChevronRight size={24} />
+            </button>
+            
+            {/* Photo Dots */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1">
+              {photos.map((_, index) => (
+                <div
+                  key={index}
+                  className={`h-1 rounded-full transition-all ${
+                    index === currentPhotoIndex ? 'w-8 bg-white' : 'w-1 bg-white/50'
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
         
         {/* Overlay Info */}
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 text-white">

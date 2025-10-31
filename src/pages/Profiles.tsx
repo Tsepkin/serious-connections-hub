@@ -45,7 +45,14 @@ const Profiles = () => {
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [showSwipeHint, setShowSwipeHint] = useState(true);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // Hide swipe hint after 3 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSwipeHint(false), 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -406,10 +413,15 @@ const Profiles = () => {
     const isRightSwipe = distance < -50;
     
     if (isLeftSwipe) {
+      setShowSwipeHint(false);
       handleSkip();
     } else if (isRightSwipe) {
+      setShowSwipeHint(false);
       handleLike();
     }
+    
+    setTouchStart(null);
+    setTouchEnd(null);
   };
 
   if (loading) {
@@ -447,7 +459,15 @@ const Profiles = () => {
       </div>
 
       <div className="p-4 max-w-2xl mx-auto">
-        <div 
+        {showSwipeHint && (
+          <div className="mb-4 bg-primary/10 border border-primary rounded-lg p-3 animate-pulse">
+            <p className="text-sm text-center text-primary font-medium">
+              💡 Свайп влево = пропустить, вправо = лайк
+            </p>
+          </div>
+        )}
+        
+        <div
           ref={cardRef}
           className={`bg-card rounded-3xl shadow-card overflow-hidden transition-all duration-300 ${
             swipeDirection === 'left' ? 'animate-slide-out-right opacity-0' : ''

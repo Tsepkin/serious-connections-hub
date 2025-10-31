@@ -41,6 +41,27 @@ const CreateProfile = () => {
     zodiac_sign: "",
   });
 
+  // Load autosaved data from localStorage
+  useEffect(() => {
+    const savedData = localStorage.getItem('profile-draft');
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        setFormData(parsed);
+      } catch (e) {
+        console.error('Failed to parse saved data:', e);
+      }
+    }
+  }, []);
+
+  // Autosave form data
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      localStorage.setItem('profile-draft', JSON.stringify(formData));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [formData]);
+
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -143,6 +164,9 @@ const CreateProfile = () => {
       }
 
       if (error) throw error;
+
+      // Clear autosaved data after successful submission
+      localStorage.removeItem('profile-draft');
 
       toast({
         title: isEditing ? "Профиль обновлен!" : "Профиль создан!",
